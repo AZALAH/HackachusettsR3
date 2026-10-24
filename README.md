@@ -6,6 +6,9 @@ DataMon is a pre-training quality gate for robot demonstration data, built for
 Hackachusetts 2026 R3. It catches collection defects while an operator can still
 redo the episode instead of discovering them after a training run.
 
+Continuing development? Start with [HANDOFF.md](HANDOFF.md) for the architecture,
+validated commands, data safeguards, known limits, and prioritized next work.
+
 ## What it checks
 
 - Missing, vague, or likely-gibberish task descriptions
