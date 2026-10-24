@@ -67,6 +67,7 @@ class Slide:
         self.images = []  # (rId, filename)
         self.notes = notes
         self._id = 2
+        self.page = 0
 
     def _next(self) -> int:
         self._id += 1
@@ -136,7 +137,8 @@ class Slide:
         return (
             f'{XML}<p:sld {NS}><p:cSld><p:bg><p:bgPr><a:solidFill>'
             f'<a:srgbClr val="{BG}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>'
-            f'<p:spTree>{GRP}{"".join(self.shapes)}</p:spTree></p:cSld>'
+            f'<p:spTree>{GRP}{"".join(self.shapes).replace("__PAGE__", str(self.page))}'
+            f'</p:spTree></p:cSld>'
             f'<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>'
         )
 
@@ -189,7 +191,7 @@ def footer(s: Slide, n: int):
     s.box(0.75, 7.02, 0.55, 0.05, TEAL, radius=False)
     s.text(1.4, 6.86, 6, 0.35, [P(_run("DataMon  ·  Hackachusetts  ·  Robotics & Hardware",
                                        10, MUTED))])
-    s.text(11.6, 6.86, 1.0, 0.35, [P(_run(str(n), 10, MUTED), align="r")])
+    s.text(11.6, 6.86, 1.0, 0.35, [P(_run("__PAGE__", 10, MUTED), align="r")])
 
 
 def card(s: Slide, x, y, w, h, label, body, accent=TEAL, label_size=18, body_size=13.5):
@@ -208,8 +210,8 @@ def build_slides() -> list:
 
     # 1. Title
     s = Slide(
-        "[0:00-0:08] Robots learn by copying recorded demonstrations. "
-        "And one bad demonstration quietly teaches a robot the wrong move."
+        "[0:00-0:10] Hi, I'm Ahmed Salah. My teammate Jesse Silva and I built "
+        'DataMon for the Robotics and Hardware track.'
     )
     s.image("mascot.png", 0.85, 1.55, w=2.6)
     s.text(3.85, 1.55, 8.8, 1.3, [P(_run("Data", 66, TEXT, True, HEAD_FONT),
@@ -230,10 +232,9 @@ def build_slides() -> list:
 
     # 2. Problem
     s = Slide(
-        '[0:08-0:20] A frozen sensor. A timing glitch. A recording nobody labelled.'
-        ' The robot learns from all of it, and nobody notices until after an '
-        'expensive training run. Garbage in, garbage out. Except here, the garbage '
-        'learns to drive a robot arm.'
+        '[0:10-0:20] Robots learn by copying recorded demonstrations. But a frozen '
+        'sensor, a timing glitch, or a recording nobody labelled teaches the robot '
+        'the wrong thing, and nobody notices until after an expensive training run.'
     )
     title(s, "The problem", "Bad robot data fails silently")
     items = [
@@ -255,9 +256,9 @@ def build_slides() -> list:
 
     # 3. Solution
     s = Slide(
-        '[0:20-0:30] DataMon is a quality gate for robot training data. Every '
-        'recording gets a score from zero to a hundred, with the reasons, and goes '
-        'one of three ways: clean, held for a human, or quarantined.'
+        '[0:20-0:30] DataMon is a quality gate. Every recording gets a score from '
+        'zero to a hundred, with reasons, and is accepted, held for a human, or '
+        'quarantined. (Next: Kiro slide, then switch to the live demo.)'
     )
     title(s, "The solution", "Every recording is scored, explained and routed")
     s.text(0.75, 1.85, 11.8, 0.6, [P(_run(
@@ -282,10 +283,9 @@ def build_slides() -> list:
 
     # 4. How it scores
     s = Slide(
-        "(Optional explainer slide. In the video this is covered during the live demo.) "
-        "Four checks: integrity, labels, an unusualness rank against known-good "
-        "recordings, then routing with an audit trail. The anomaly number is a rank, "
-        "not a probability."
+        '(BACKUP SLIDE, not in the video.) Four checks: integrity, labels, an '
+        'unusualness rank against known-good recordings, then routing with an audit'
+        ' trail. The anomaly number is a rank, not a probability.'
     )
     title(s, "How it works", "Four checks, in plain terms")
     steps = [
@@ -310,18 +310,8 @@ def build_slides() -> list:
 
     # 5. Live demo divider
     s = Slide(
-        "[0:30-1:35] LIVE DEMO (screen recording). 1) Sign in as judge: 'Here it is"
-        ' live, on real public robot data from DROID and BridgeData. The loading '
-        'screen is actually scoring every recording, and telling robot jokes while '
-        "it works.' 2) Ingest gate, stream the reject episode: 'I'll replay a "
-        "recording frame by frame, as if it's coming off a robot right now... and "
-        "it's rejected. You see the verdict, and you hear it.' 3) Review queue: "
-        "'When the gate isn't sure, it asks. I can promote this one, reject it, or "
-        'send it back to be recorded again. Every decision lands in an audit trail '
-        "that's never overwritten.' 4) Dataset quality: 'The report card for the "
-        "whole dataset: a score, a verdict and the reasons for every recording.' 5)"
-        " Label / coverage: 'And here, recordings with missing or nonsense task "
-        "labels. The robot was never told what it was doing.'"
+        '(BACKUP SLIDE, not in the video.) Live site and judge sign-in, for a live '
+        'presentation or questions.'
     )
     s.text(0.75, 1.6, 11.8, 0.5, [P(_run("LIVE DEMO", 16, TEAL, True, HEAD_FONT),
                                     align="c")])
@@ -339,10 +329,9 @@ def build_slides() -> list:
 
     # 6. Accessibility and design
     s = Slide(
-        "[1:35-1:55] (Show ~5 s of tour step 1 first.) We built it so nobody's left"
-        ' out: a narrated tour with captions and a pointing arrow, a help assistant'
-        ' that only answers from our own docs, and reduced-motion support '
-        'throughout.'
+        '(BACKUP SLIDE, not in the video.) Narrated tour with captions and a '
+        'pointing arrow, a grounded help assistant, a sound plus a colour-coded '
+        'verdict on rejections, and reduced-motion support.'
     )
     title(s, "Built for everyone", "Accessible, and fun to use")
     feats = [
@@ -368,14 +357,13 @@ def build_slides() -> list:
 
     # 7. How we used Kiro
     s = Slide(
-        '[1:55-2:30] We built all of it with Kiro, using two of its tools. Kiro '
-        'Crew on a laptop set up Python, ran the app and tests, and shipped each '
-        'feature as its own pull request. Kiro Web worked in a cloud sandbox that '
-        "couldn't install Streamlit, so it read Streamlit's source on GitHub, let "
-        'CI run the tests, and used the Playwright power to screenshot the '
-        'interface before shipping. Specs defined our core features, and two '
-        'steering docs kept every session honest and tested. Twenty-one pull '
-        'requests, a hundred and twenty-nine passing tests.'
+        '[0:30-0:52] We built it entirely with Kiro. Kiro Crew on my laptop set up '
+        'the project, ran the tests, and shipped every feature as its own pull '
+        "request. Kiro Web, in the cloud, couldn't install Streamlit, so it read "
+        "Streamlit's source on GitHub and used the Playwright power to screenshot "
+        'the UI before shipping. Specs and steering docs kept it consistent: '
+        'twenty-one pull requests, a hundred and twenty-nine passing tests. (Then '
+        'switch to the live demo: see VIDEO_SCRIPT.md, 0:52-2:42.)'
     )
     title(s, "Implementation", "How we used Kiro")
     s.box(0.75, 1.95, 5.75, 2.2, PANEL, line=PANEL_LINE)
@@ -415,10 +403,9 @@ def build_slides() -> list:
 
     # 8. Who benefits / scale
     s = Slide(
-        '[2:30-2:45] DataMon reads the open LeRobot format, so it works on any '
-        'dataset published that way, and live robots can stream straight in. Labs, '
-        "data-collection teams and dataset publishers catch bad data while it's "
-        'still cheap to fix.'
+        '(BACKUP SLIDE, not in the video.) Labs, data-collection teams and dataset '
+        'publishers. Reads any LeRobot dataset, streams from live robots, per-robot'
+        ' profiles and per-task baselines.'
     )
     title(s, "Potential value", "Who benefits, and how it scales")
     who = [
@@ -444,7 +431,9 @@ def build_slides() -> list:
 
     # 9. Try it
     s = Slide(
-        "[2:45-2:52] Good data in. Bad data out. That's DataMon."
+        '[2:42-2:55] It reads the open LeRobot format, so it works with any dataset'
+        " published that way. Good data in, bad data out. That's DataMon. Thanks "
+        'for watching.'
     )
     s.image("mascot.png", 0.85, 1.0, w=1.6)
     s.text(2.7, 1.05, 5.0, 1.0, [P(_run("Try DataMon", 40, TEXT, True, HEAD_FONT))])
@@ -465,7 +454,13 @@ def build_slides() -> list:
                                     align="c")])
     footer(s, 9)
     slides.append(s)
-    return slides
+    # Video order: title, problem, solution, Kiro, close. Then backup slides
+    # for questions: how scoring works, accessibility, who benefits, demo card.
+    title_, problem, solution, how, demo, access, kiro, value, close = slides
+    ordered = [title_, problem, solution, kiro, close, how, access, value, demo]
+    for page, slide in enumerate(ordered, start=1):
+        slide.page = page
+    return ordered
 
 
 # --- Package parts ---------------------------------------------------------------
