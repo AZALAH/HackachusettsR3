@@ -28,6 +28,7 @@ from datamon.frames import DEFAULT_MAX_FILE_BYTES, load_parquet
 from datamon.gate import GateConfig, IngestGate, OperatorAction
 from datamon.help_agent import answer as help_answer
 from datamon.help_agent import suggested_questions as help_suggested_questions
+from datamon.intro import LOADING_SECONDS, POPIN_CSS, loading_html
 from datamon.lerobot import load_episodes, task_map
 from datamon.monitor import Monitor
 from datamon.profiles import ProfileStore, RobotProfile
@@ -73,16 +74,20 @@ def _require_login() -> None:
                 f"{lockout.seconds_remaining()}s."
             )
         elif submitted:
-            role = verify_password(username.strip(), password)
+            role = verify_password(username.strip(), password.strip())
             if role:
                 lockout.record_success()
                 state["auth_user"] = username.strip()
                 state["auth_role"] = role
                 state["auth_last_active"] = time.time()
+                state["auth_just_logged_in"] = True
                 st.rerun()
             else:
                 lockout.record_failure()
-                st.error("Invalid username or password.")
+                st.error(
+                    "Invalid username or password. Check for stray spaces; the "
+                    "password is case-sensitive."
+                )
         st.caption(
             "Demo-grade local login. Credentials for judges are in TESTING.md. "
             "Not production SSO — see SECURITY.md."
@@ -91,6 +96,25 @@ def _require_login() -> None:
 
 
 _require_login()
+
+
+def _play_intro() -> None:
+    """Show the robot-driving loader once, right after a fresh sign-in."""
+    if not st.session_state.pop("auth_just_logged_in", False):
+        return
+    placeholder = st.empty()
+    placeholder.markdown(loading_html(LOADING_SECONDS), unsafe_allow_html=True)
+    time.sleep(LOADING_SECONDS)
+    placeholder.empty()
+    st.session_state["auth_show_popin"] = True
+    st.rerun()
+
+
+_play_intro()
+
+# The app pops into place on the run after the loader clears.
+if st.session_state.pop("auth_show_popin", False):
+    st.markdown(POPIN_CSS, unsafe_allow_html=True)
 
 BRIDGE_ROOT = Path("data/lerobot/bridge_v2")
 BRIDGE_DATA = BRIDGE_ROOT / "data" / "chunk-000"
