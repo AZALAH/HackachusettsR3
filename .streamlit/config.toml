@@ -1,0 +1,18 @@
+[theme]
+# DataMon house theme — a calm slate base so the green/amber/red quality
+# verdicts remain the loudest thing on screen, with a confident teal primary
+# for controls and accents.
+base = "dark"
+primaryColor = "#2dd4bf"
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#1a1f2b"
+textColor = "#e6edf3"
+font = "sans serif"
+
+[server]
+# Local trusted-file demo: bind to loopback only.
+address = "127.0.0.1"
+headless = true
+
+[browser]
+gatherUsageStats = false

@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from datamon.branding import inject_global_css, render_brand_header
 from datamon.episode_quality import analyze_episodes
 from datamon.frame_quality import DetectorConfig
 from datamon.frames import DEFAULT_MAX_FILE_BYTES, load_parquet
@@ -29,6 +30,7 @@ from datamon.stream import StreamIngestor
 from datamon.tour import audio_path_for, render_tour
 
 st.set_page_config(page_title="Robot Data Quality Monitor", layout="wide")
+inject_global_css(st)
 
 BRIDGE_ROOT = Path("data/lerobot/bridge_v2")
 BRIDGE_DATA = BRIDGE_ROOT / "data" / "chunk-000"
@@ -241,6 +243,7 @@ if st.session_state.get("gate_signature") != signature:
     st.session_state.gate_signature = signature
 gate: IngestGate = st.session_state.gate
 
+render_brand_header(st)
 st.title("Robot Data-Collection Quality Monitor")
 st.caption(
     "Catch sensor, timing, labeling, and demonstration problems before they "
