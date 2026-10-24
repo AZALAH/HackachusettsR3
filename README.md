@@ -8,6 +8,8 @@ redo the episode instead of discovering them after a training run.
 
 Continuing development? Start with [HANDOFF.md](HANDOFF.md) for the architecture,
 validated commands, data safeguards, known limits, and prioritized next work.
+Presenting it? [DEMO.md](DEMO.md) has a four-minute scripted path and a
+deterministic fault fallback.
 
 ## What it checks
 
@@ -40,7 +42,11 @@ The Streamlit portal provides:
 - Replay through the same frame-by-frame stream API used by live collectors
 - Immediate frame-order, timing, and non-finite-value feedback
 - Per-episode scores, reasons, state traces, and accept/review/reject decisions
+- An operator **review queue**: promote a held episode to clean, reject it, or
+  request recollection, with every decision appended to the audit trail
 - Dataset-level quality and BridgeData V2 label/coverage summaries
+- Saved **robot profiles**: capture a rig's FPS, channel ranges, and static
+  channels once, then reapply them in one click
 - Configurable FPS, timing tolerance, score bands, channel bounds, and expected
   static channels
 
@@ -89,6 +95,7 @@ python scripts/run_episode_quality.py  # 53k BridgeData metadata records
 python scripts/run_frame_quality.py    # real episodes plus injected defects
 python scripts/run_scoring.py          # DROID-100 scores and anomaly ranking
 python scripts/run_gate.py             # content routing and stream feedback
+python scripts/run_collector.py        # simulated live transport + policies
 ```
 
 Each command reports a clear prerequisite message if the bounded dataset slice
@@ -135,6 +142,8 @@ datamon/
   scoring.py          explainable score and calibrated anomaly rank
   gate.py             content-addressed routing and audit manifest
   stream.py           bounded live episode buffering and feedback
+  collector.py        transport-agnostic adapter (disconnect/partial/backpressure)
+  profiles.py         named per-robot profiles and persistent store
   monitor.py          cached dataset orchestration
 dashboard.py          Streamlit operator portal
 scripts/              verified data downloader and demonstrations
@@ -159,14 +168,18 @@ GitHub Actions runs the same checks on Python 3.9 and 3.13.
 
 ## Limitations
 
-- Detector thresholds are prototype defaults and need calibration for each robot,
-  task family, and sensor schema.
+- Detector thresholds are prototype defaults. Calibrate them per robot with a
+  saved profile (FPS, channel ranges, static channels, task family) before
+  trusting warnings on an unfamiliar rig.
 - The anomaly value is an empirical upper-tail rank against reference episodes,
-  not a probability that a demonstration is bad.
+  not a probability that a demonstration is bad. Baselines can be conditioned
+  per task so an episode is judged against other demonstrations of the same task.
 - Coverage metrics operate on raw task strings; semantic label normalization is
   required before using them to drive collection budgets.
-- Replay demonstrates the streaming API but is not a network transport. A real
-  collector should call `StreamIngestor.push_frame` from its acquisition loop.
+- `scripts/run_collector.py` simulates a live transport through `CollectorAdapter`;
+  a real deployment supplies the transport (ROS 2, WebSocket, SDK) that calls
+  `adapter.submit(...)`. The adapter owns disconnect, partial-episode, and
+  backpressure policy, but the network client itself is deployment-specific.
 - No quality gate can prove that accepted data will train a successful model.
 
 ## License

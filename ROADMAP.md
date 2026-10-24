@@ -12,14 +12,17 @@
 - Streamlit portal for configuration, upload, replay, scoring, and dataset review
 - Pinned, checksum-verified, video-free demo-data download
 - Network-free automated tests and GitHub Actions validation
+- Operator review queue with promote / reject / request-recollection actions
+- Transport-agnostic collector adapter with disconnect, partial-episode, and
+  backpressure policies
+- Named per-robot profiles (FPS, channel roles, ranges, static channels, task
+  family) with a persistent store
+- Task-conditioned anomaly baselines with a global fallback
 
 ## Next
 
-- Add a real transport adapter (ROS 2, WebSocket, or collector callback)
-- Add operator promotion/rejection actions for the review queue
 - Normalize task descriptions before computing semantic coverage targets
-- Calibrate channel roles, ranges, and detector thresholds per robot
-- Add task-conditioned anomaly baselines
+- Validate score thresholds against labeled good/recollect decisions
 - Produce the final demo recording
 
 ## Deployment work required
