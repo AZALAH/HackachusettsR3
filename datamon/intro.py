@@ -1,13 +1,13 @@
-"""Post-login loading screen (animated GIF) and a simple fade into the app.
+"""Post-login loading screen (animated GIF) and a smooth fade into the app.
 
-Streamlit re-runs on every interaction, which restarts and visually freezes CSS
-keyframe animations — so a scripted CSS loader never played. A GIF is an image
-that plays itself, so it animates reliably here just as it would on a static
-page. The loader GIF is pre-rendered and committed (see
-``scripts/make_loader_gif.py``); the app only displays it.
+Streamlit re-runs on every interaction, which restarts and freezes CSS keyframe
+animations. A GIF plays itself, so it animates reliably. The loader GIF is
+pre-rendered and committed (see ``scripts/make_loader_gif.py``); the app only
+displays it.
 
-The dashboard entry is a plain opacity fade — robust where a transform-based
-"pop-in" was not.
+While the loader is up it OWNS the screen: Streamlit's header, the image
+fullscreen button, and any other chrome are hidden so nothing else shows behind
+or above it. The dashboard then fades in once, smoothly.
 """
 
 from __future__ import annotations
@@ -17,25 +17,47 @@ from pathlib import Path
 LOADING_SECONDS = 9
 LOADER_GIF = Path("assets/loader.gif")
 
+# Hides all Streamlit chrome and centers the loader as a full-screen takeover.
+_LOADER_CSS = """
+<style>
+[data-testid="stHeader"], [data-testid="stToolbar"],
+[data-testid="stSidebar"] { display: none !important; }
+/* Hide the image fullscreen/expand button on the loader image. */
+[data-testid="StyledFullScreenButton"],
+button[title="View fullscreen"] { display: none !important; }
+[data-testid="stAppViewContainer"] {
+  background: radial-gradient(1200px 600px at 50% 40%, #13303a 0%, #0e1117 70%);
+}
+.block-container { padding-top: 8vh !important; }
+</style>
+"""
+
+# Gentle fade for the whole app view, so the dashboard eases in (not choppy).
 FADE_CSS = """
 <style>
-section.main > div.block-container { animation: datamon-fade 0.8s ease both; }
-@keyframes datamon-fade { from { opacity: 0; } to { opacity: 1; } }
+[data-testid="stAppViewContainer"] {
+  animation: datamon-fade 1.1s ease-out both;
+}
+@keyframes datamon-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
-  section.main > div.block-container { animation: none; }
+  [data-testid="stAppViewContainer"] { animation: none; }
 }
 </style>
 """
 
 
 def render_loading(st_module) -> None:
-    """Show the animated GIF loader centered on the page."""
+    """Full-screen GIF loader that takes over while the app boots."""
     st = st_module
+    st.markdown(_LOADER_CSS, unsafe_allow_html=True)
     if LOADER_GIF.is_file():
         left, mid, right = st.columns([1, 2, 1])
         with mid:
             st.image(str(LOADER_GIF), use_container_width=True)
-    else:  # asset missing — fall back to a plain spinner-style message
+    else:
         st.info("Welcome to DataMon — starting the quality monitor…")
 
 
