@@ -16,6 +16,11 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from datamon.auth import (
+    LockoutState,
+    session_expired,
+    verify_password,
+)
 from datamon.branding import inject_global_css, render_brand_header
 from datamon.episode_quality import analyze_episodes
 from datamon.frame_quality import DetectorConfig
@@ -31,6 +36,61 @@ from datamon.tour import audio_path_for, render_tour
 
 st.set_page_config(page_title="Robot Data Quality Monitor", layout="wide")
 inject_global_css(st)
+
+
+def _require_login() -> None:
+    """Block the app behind a demo-grade login until authenticated."""
+    state = st.session_state
+
+    # Idle-timeout an existing session.
+    if state.get("auth_user") and session_expired(state.get("auth_last_active")):
+        for key in ("auth_user", "auth_role", "auth_last_active"):
+            state.pop(key, None)
+        state["auth_notice"] = "Session timed out. Please sign in again."
+
+    if state.get("auth_user"):
+        state["auth_last_active"] = time.time()
+        return
+
+    if "auth_lockout" not in state:
+        state["auth_lockout"] = LockoutState()
+    lockout: LockoutState = state["auth_lockout"]
+
+    left, center, right = st.columns([1, 1.2, 1])
+    with center:
+        render_brand_header(st)
+        st.markdown("#### Sign in")
+        notice = state.pop("auth_notice", None)
+        if notice:
+            st.warning(notice)
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Sign in", type="primary")
+        if lockout.is_locked():
+            st.error(
+                f"Too many failed attempts. Try again in "
+                f"{lockout.seconds_remaining()}s."
+            )
+        elif submitted:
+            role = verify_password(username.strip(), password)
+            if role:
+                lockout.record_success()
+                state["auth_user"] = username.strip()
+                state["auth_role"] = role
+                state["auth_last_active"] = time.time()
+                st.rerun()
+            else:
+                lockout.record_failure()
+                st.error("Invalid username or password.")
+        st.caption(
+            "Demo-grade local login. Credentials for judges are in TESTING.md. "
+            "Not production SSO — see SECURITY.md."
+        )
+    st.stop()
+
+
+_require_login()
 
 BRIDGE_ROOT = Path("data/lerobot/bridge_v2")
 BRIDGE_DATA = BRIDGE_ROOT / "data" / "chunk-000"
@@ -121,6 +181,16 @@ def analyze_bridge_metadata() -> tuple[pd.DataFrame, object]:
 
 st.sidebar.title("Monitor setup")
 st.sidebar.caption("Configure the source and quality policy before collection.")
+
+with st.sidebar.container(border=True):
+    st.markdown(
+        f"Signed in as **{st.session_state.get('auth_user', '?')}** "
+        f"(`{st.session_state.get('auth_role', '?')}`)"
+    )
+    if st.button("Sign out", key="sign_out", width="stretch"):
+        for key in ("auth_user", "auth_role", "auth_last_active"):
+            st.session_state.pop(key, None)
+        st.rerun()
 
 with st.sidebar.container(border=True):
     st.caption("New here? Take the narrated, arrow-guided walkthrough.")
