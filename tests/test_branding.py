@@ -89,3 +89,15 @@ def test_svg_artwork_round_trips_through_data_uri():
 
 def test_mascot_img_has_alt_text():
     assert 'alt="DataMon robot holding a shield"' in mascot_img(64)
+
+
+def test_sidebar_clock_renders_with_script_and_scaled_numerals():
+    from datamon.branding import render_clock
+
+    fake = _FakeSt()
+    render_clock(fake, size=200)
+    body, allow_js = fake.html_calls[0]
+    assert allow_js is True
+    assert "setInterval" in body and "width:200px" in body
+    assert "font:700 13.2px/1" in body  # numerals grow with the face
+    assert "__NUM__" not in body and "__SIZE__" not in body

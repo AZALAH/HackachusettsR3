@@ -24,6 +24,7 @@ from datamon.auth import (
 from datamon.branding import (
     inject_global_css,
     render_brand_header,
+    render_clock,
     render_login_hero,
 )
 from datamon.episode_quality import analyze_episodes
@@ -290,6 +291,8 @@ if st.session_state.pop("auth_show_reveal", False):
     render_reveal(st, st.session_state.get("reveal_token", "reveal"))
 
 
+with st.sidebar:
+    render_clock(st)
 st.sidebar.title("Monitor setup")
 st.sidebar.caption("Configure the source and quality policy before collection.")
 
@@ -429,7 +432,7 @@ if st.session_state.get("gate_signature") != signature:
     st.session_state.gate_signature = signature
 gate: IngestGate = st.session_state.gate
 
-render_brand_header(st, clock=True)
+render_brand_header(st)
 st.title("Robot Data-Collection Quality Monitor")
 st.caption(
     "Catch sensor, timing, labeling, and demonstration problems before they "
