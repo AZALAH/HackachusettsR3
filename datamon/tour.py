@@ -12,7 +12,6 @@ respects the viewer's reduced-motion preference and a tour-level toggle.
 
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -89,32 +88,38 @@ def audio_path_for(step_id: str) -> Optional[Path]:
     return None
 
 
-def _audio_data_uri(step_id: str) -> Optional[str]:
-    path = audio_path_for(step_id)
-    if path is None:
-        return None
-    mime = "audio/mpeg" if path.suffix == ".mp3" else "audio/wav"
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-    return f"data:{mime};base64,{encoded}"
+def go_to_step(state, index: int) -> None:
+    """Move the tour to ``index`` (clamped) and count a new visit.
+
+    Used as a button callback, so the state changes BEFORE the re-run and one
+    click costs one re-run. The visit counter gives each visit's narration a
+    distinct identity, so Back replays a line instead of staying silent.
+    """
+    state["tour_active"] = True
+    state["tour_index"] = max(0, min(int(index), len(TOUR_STEPS) - 1))
+    state["tour_visit"] = int(state.get("tour_visit", 0)) + 1
+
+
+def end_tour(state) -> None:
+    state["tour_active"] = False
 
 
 def render_tour(st_module, *, reduced_motion: bool = False) -> None:
     """Render the tour launcher and, when active, the current step's card.
 
-    Narration auto-plays (hidden player) on each step; a bold arrow points in the
-    step's direction. ``st_module`` is the imported ``streamlit`` module, passed
-    in so this stays unit-testable without a running Streamlit server.
+    Narration auto-plays on each step through Streamlit's own media server (the
+    player is hidden by the global CSS); a bold arrow points in the step's
+    direction. ``st_module`` is the imported ``streamlit`` module, passed in so
+    this stays unit-testable without a running Streamlit server.
     """
-    import streamlit.components.v1 as components
-
     st = st_module
     state = st.session_state
 
     if not state.get("tour_active"):
-        if st.button("\u25b6 Start guided tour", key="tour_start"):
-            state["tour_active"] = True
-            state["tour_index"] = 0
-            st.rerun()
+        st.button(
+            "\u25b6 Start guided tour", key="tour_start",
+            on_click=go_to_step, args=(state, 0),
+        )
         return
 
     index = int(state.get("tour_index", 0))
@@ -157,29 +162,32 @@ def render_tour(st_module, *, reduced_motion: bool = False) -> None:
     """
     st.markdown(card, unsafe_allow_html=True)
 
-    # Auto-play the step's narration with NO visible player. Keyed to the step id
-    # so a new clip fires on each Next/Back. A browser that blocks autoplay simply
-    # stays silent — the caption above already carries the same words.
-    audio = _audio_data_uri(step.step_id)
-    if audio:
-        components.html(
-            f'<audio autoplay src="{audio}"></audio>'
-            f'<!-- step {step.step_id} -->',
-            height=0,
+    # Auto-play the step's narration. Streamlit serves the file by URL (no
+    # base64 blob re-sent on every click) and never replays an element it has
+    # already played, so ``alt`` carries the visit number to make each visit a
+    # new element. A browser that blocks autoplay stays silent; the caption
+    # above carries the same words.
+    audio = audio_path_for(step.step_id)
+    if audio is not None:
+        st.audio(
+            str(audio),
+            format="audio/mpeg" if audio.suffix == ".mp3" else "audio/wav",
+            autoplay=True,
+            alt=f"Narration: {step.title} (visit {state.get('tour_visit', 0)})",
         )
 
     controls = st.columns([1, 1, 1])
-    if controls[0].button("\u25c0 Back", key="tour_back", disabled=index == 0):
-        state["tour_index"] = max(0, index - 1)
-        st.rerun()
+    controls[0].button(
+        "\u25c0 Back", key="tour_back", disabled=index == 0,
+        on_click=go_to_step, args=(state, index - 1),
+    )
     if index < len(TOUR_STEPS) - 1:
-        if controls[1].button("Next \u25b6", key="tour_next"):
-            state["tour_index"] = index + 1
-            st.rerun()
+        controls[1].button(
+            "Next \u25b6", key="tour_next",
+            on_click=go_to_step, args=(state, index + 1),
+        )
     else:
-        if controls[1].button("Finish \u2713", key="tour_finish"):
-            state["tour_active"] = False
-            st.rerun()
-    if controls[2].button("Exit tour", key="tour_exit"):
-        state["tour_active"] = False
-        st.rerun()
+        controls[1].button(
+            "Finish \u2713", key="tour_finish", on_click=end_tour, args=(state,),
+        )
+    controls[2].button("Exit tour", key="tour_exit", on_click=end_tour, args=(state,))

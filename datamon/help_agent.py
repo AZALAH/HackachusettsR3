@@ -113,6 +113,16 @@ KNOWLEDGE_BASE: List[QA] = [
         ("safe", "security", "public", "deploy", "internet", "login", "secure"),
     ),
     QA(
+        "What is LeRobot?",
+        "LeRobot is Hugging Face's open-source project and file format for robot "
+        "learning data. A LeRobot recording is a table: one row per moment, with "
+        "the robot's joint readings (state), the command it was given (action), "
+        "a timestamp, and the task it was told to do. DROID and BridgeData are "
+        "published in this format, so DataMon reads them, and your own uploads, "
+        "the same way.",
+        ("lerobot", "mean", "format", "hugging", "face", "standard"),
+    ),
+    QA(
         "How do I take the guided tour?",
         "In the sidebar, click 'Start guided tour'. It walks the whole interface "
         "step by step with on-screen captions, a pointing arrow, and narration "

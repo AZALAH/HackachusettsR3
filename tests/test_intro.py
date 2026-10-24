@@ -30,3 +30,29 @@ def test_render_helpers_exist():
 def test_login_tolerates_surrounding_spaces_after_strip():
     assert verify_password("judge".strip(), " Hello World! ".strip()) == "judge"
     assert verify_password(" programmer ".strip(), " 101010 ".strip()) == "programmer"
+
+
+def test_loader_fades_out_at_the_end_of_its_run():
+    css = intro._loader_css(9)
+    assert "datamon-loader-out" in css
+    # The fade starts FADE_OUT_SECONDS before the loader ends.
+    assert f"{9 - intro.FADE_OUT_SECONDS:.2f}s" in css
+
+
+def test_render_loading_runs_warmup_and_survives_its_failure(monkeypatch):
+    class _FakeSt:
+        def markdown(self, *args, **kwargs):
+            pass
+
+        def info(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(intro, "LOADER_GIF", intro.Path("does-not-exist.gif"))
+    calls = []
+
+    def warmup():
+        calls.append("ran")
+        raise RuntimeError("dataset offline")
+
+    intro.render_loading(_FakeSt(), warmup=warmup, total_seconds=0)
+    assert calls == ["ran"]

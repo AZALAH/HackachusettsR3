@@ -30,6 +30,11 @@ def test_anomaly_answer_keeps_honest_framing():
     assert "not a probability" in reply.lower()
 
 
+def test_lerobot_question_is_answered():
+    reply = answer("what does LeRobot mean?")
+    assert "hugging face" in reply.lower()
+
+
 def test_unknown_question_returns_honest_fallback():
     reply = answer("what's the weather in Boston tomorrow?")
     assert "don't have a grounded answer" in reply.lower()
