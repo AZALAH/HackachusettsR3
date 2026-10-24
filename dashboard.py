@@ -22,6 +22,7 @@ from datamon.frames import DEFAULT_MAX_FILE_BYTES, load_parquet
 from datamon.gate import GateConfig, IngestGate, OperatorAction
 from datamon.lerobot import load_episodes, task_map
 from datamon.monitor import Monitor
+from datamon.profiles import ProfileStore, RobotProfile
 from datamon.stream import StreamIngestor
 
 st.set_page_config(page_title="Robot Data Quality Monitor", layout="wide")
@@ -31,6 +32,7 @@ BRIDGE_DATA = BRIDGE_ROOT / "data" / "chunk-000"
 DROID_ROOT = Path("data/lerobot/droid_100")
 DROID_DATA = DROID_ROOT / "data" / "chunk-000" / "file-000.parquet"
 INGEST_ROOT = Path("data/ingest_live")
+PROFILE_STORE_PATH = Path("data/robot_profiles.json")
 GRADE_COLOR = {"good": "#2e9e44", "review": "#d9a400", "reject": "#d64545"}
 
 
@@ -109,26 +111,84 @@ st.sidebar.title("Monitor setup")
 st.sidebar.caption("Configure the source and quality policy before collection.")
 source = st.sidebar.selectbox("Data source", ["DROID-100", "BridgeData V2 (sample)"])
 default_fps = 15.0 if source == "DROID-100" else 5.0
-fps = st.sidebar.number_input("Expected capture rate (fps)", 1.0, 120.0, default_fps, 1.0)
+
+profile_store = ProfileStore(PROFILE_STORE_PATH)
+with st.sidebar.expander("Robot profile"):
+    st.caption(
+        "Save a rig's expected rate, channel ranges, and static channels as a "
+        "named profile, then reapply it in one click for the next collection."
+    )
+    saved_names = profile_store.names()
+    chosen = st.selectbox(
+        "Saved profiles", ["(none)"] + saved_names, key="profile_choice",
+    )
+    if chosen != "(none)" and st.button("Apply profile", width="stretch"):
+        profile = profile_store.get(chosen)
+        st.session_state["fps_input"] = float(profile.fps)
+        st.session_state["ranges_json_input"] = json.dumps(
+            {name: list(bounds) for name, bounds in profile.ranges.items()}
+        ) if profile.ranges else ""
+        st.session_state["static_channels_input"] = ", ".join(
+            profile.allowed_static_channels
+        )
+        st.session_state["jitter_pct_input"] = int(round(profile.jitter_tolerance * 100))
+        st.session_state["profile_flash"] = f"Applied profile '{chosen}'."
+        st.rerun()
+    new_name = st.text_input(
+        "Save current settings as", placeholder="franka_panda", key="profile_new_name",
+    )
+    if st.button("Save profile", width="stretch"):
+        try:
+            profile = RobotProfile(
+                name=new_name.strip(),
+                fps=float(st.session_state.get("fps_input", default_fps)),
+                jitter_tolerance=st.session_state.get("jitter_pct_input", 25) / 100.0,
+                cadence_tolerance=st.session_state.get("jitter_pct_input", 25) / 100.0,
+                ranges=_parse_ranges(st.session_state.get("ranges_json_input", "")),
+                allowed_static_channels=[
+                    value.strip()
+                    for value in st.session_state.get("static_channels_input", "").split(",")
+                    if value.strip()
+                ],
+                task_family=(source.split()[0].lower()),
+            )
+            profile_store.save(profile)
+            st.session_state["profile_flash"] = f"Saved profile '{profile.name}'."
+            st.rerun()
+        except Exception as error:
+            st.error(f"Could not save the profile: {error}")
+    flash = st.session_state.pop("profile_flash", None)
+    if flash:
+        st.success(flash)
+
+fps = st.sidebar.number_input(
+    "Expected capture rate (fps)", 1.0, 120.0,
+    float(st.session_state.get("fps_input", default_fps)), 1.0, key="fps_input",
+)
 reject_below, accept_at = st.sidebar.slider(
     "Quality bands (reject / accept)", 0, 100, (55, 80),
     help="Below the first value is rejected; at or above the second is accepted.",
 )
-jitter_tolerance = st.sidebar.slider("Timing tolerance (%)", 5, 100, 25) / 100.0
+jitter_tolerance = st.sidebar.slider(
+    "Timing tolerance (%)", 5, 100,
+    int(st.session_state.get("jitter_pct_input", 25)), key="jitter_pct_input",
+) / 100.0
 play_speed = st.sidebar.slider("Playback speed", 0.25, 8.0, 2.0, 0.25)
 
 with st.sidebar.expander("Advanced channel rules"):
     ranges_json = st.text_area(
         "Channel ranges (JSON)",
-        value="",
+        value=st.session_state.get("ranges_json_input", ""),
         placeholder='{"state_0": [-1.0, 1.0], "action_0": [-1.0, 1.0]}',
         help="Optional per-channel hard bounds. Non-finite values are always rejected.",
+        key="ranges_json_input",
     )
     static_channels_csv = st.text_input(
         "Allowed static channels",
-        value="",
+        value=st.session_state.get("static_channels_input", ""),
         placeholder="state_6, action_6",
         help="Comma-separated channels that are expected to stay constant.",
+        key="static_channels_input",
     )
 
 try:
