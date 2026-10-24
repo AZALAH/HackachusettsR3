@@ -370,10 +370,6 @@ st.caption(
     "Catch sensor, timing, labeling, and demonstration problems before they "
     "enter a training pipeline."
 )
-st.info(
-    "Local trusted-file demo: uploads are processed in this session and routed "
-    "under data/ingest_live/. Do not expose this app publicly without authentication."
-)
 
 tab_ingest, tab_review, tab_live, tab_dataset, tab_labels = st.tabs([
     "Ingest gate", "Review queue", "Episode playback", "Dataset quality",
