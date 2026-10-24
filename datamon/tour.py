@@ -101,9 +101,12 @@ def _audio_data_uri(step_id: str) -> Optional[str]:
 def render_tour(st_module, *, reduced_motion: bool = False) -> None:
     """Render the tour launcher and, when active, the current step's card.
 
-    ``st_module`` is the imported ``streamlit`` module, passed in so this stays a
-    plain module that unit tests can drive without a running Streamlit server.
+    Narration auto-plays (hidden player) on each step; a bold arrow points in the
+    step's direction. ``st_module`` is the imported ``streamlit`` module, passed
+    in so this stays unit-testable without a running Streamlit server.
     """
+    import streamlit.components.v1 as components
+
     st = st_module
     state = st.session_state
 
@@ -119,26 +122,31 @@ def render_tour(st_module, *, reduced_motion: bool = False) -> None:
     step = TOUR_STEPS[index]
     animate = not reduced_motion
 
-    arrow_style = (
-        "display:inline-block;font-size:2rem;"
-        "color:var(--primary-color,#d9a400);"
-        + ("animation:datamon-bounce 1s ease-in-out infinite;" if animate else "")
-    )
+    # A bold arrow that points in the step's direction and nudges toward it.
+    nudge = {
+        "\u25c0": "datamon-nudge-x-rev", "\u25b2": "datamon-nudge-y-rev",
+        "\u25b6": "datamon-nudge-x", "\u25ce": "datamon-spin",
+    }.get(step.arrow, "datamon-nudge-y")
+    arrow_anim = f"animation:{nudge} 1s ease-in-out infinite;" if animate else ""
     card = f"""
     <style>
-    @keyframes datamon-bounce {{
-        0%, 100% {{ transform: translateY(0); }}
-        50% {{ transform: translateY(-6px); }}
-    }}
+    @keyframes datamon-nudge-y {{
+      0%,100%{{transform:translateY(0)}} 50%{{transform:translateY(7px)}} }}
+    @keyframes datamon-nudge-y-rev {{
+      0%,100%{{transform:translateY(0)}} 50%{{transform:translateY(-7px)}} }}
+    @keyframes datamon-nudge-x-rev {{
+      0%,100%{{transform:translateX(0)}} 50%{{transform:translateX(-7px)}} }}
+    @keyframes datamon-nudge-x {{
+      0%,100%{{transform:translateX(0)}} 50%{{transform:translateX(7px)}} }}
+    @keyframes datamon-spin {{ from{{transform:rotate(0)}} to{{transform:rotate(360deg)}} }}
     @media (prefers-reduced-motion: reduce) {{
-        .datamon-arrow {{ animation: none !important; }}
-    }}
+      .datamon-arrow {{ animation:none !important; }} }}
     </style>
-    <div style="border:2px solid var(--primary-color,#d9a400);border-radius:12px;
-                padding:1rem 1.2rem;background:rgba(217,164,0,0.08);
-                color:inherit;">
-      <div style="display:flex;align-items:center;gap:0.6rem;">
-        <span class="datamon-arrow" style="{arrow_style}">{step.arrow}</span>
+    <div style="border:2px solid #2dd4bf;border-radius:12px;
+                padding:1rem 1.2rem;background:rgba(45,212,191,0.10);color:inherit;">
+      <div style="display:flex;align-items:center;gap:0.7rem;">
+        <span class="datamon-arrow" style="display:inline-block;font-size:2.4rem;
+              color:#2dd4bf;{arrow_anim}">{step.arrow}</span>
         <strong style="font-size:1.1rem;">Step {index + 1} of {len(TOUR_STEPS)}
           &mdash; {step.title}</strong>
       </div>
@@ -149,15 +157,20 @@ def render_tour(st_module, *, reduced_motion: bool = False) -> None:
     """
     st.markdown(card, unsafe_allow_html=True)
 
+    # Auto-play the step's narration with NO visible player. Keyed to the step id
+    # so a new clip fires on each Next/Back. A browser that blocks autoplay simply
+    # stays silent — the caption above already carries the same words.
     audio = _audio_data_uri(step.step_id)
     if audio:
-        st.audio(audio)
-    else:
-        st.caption("\U0001f507 Narration audio not recorded yet for this step.")
+        components.html(
+            f'<audio autoplay src="{audio}"></audio>'
+            f'<!-- step {step.step_id} -->',
+            height=0,
+        )
 
     controls = st.columns([1, 1, 1])
     if controls[0].button("\u25c0 Back", key="tour_back", disabled=index == 0):
-        state["tour_index"] = index - 1
+        state["tour_index"] = max(0, index - 1)
         st.rerun()
     if index < len(TOUR_STEPS) - 1:
         if controls[1].button("Next \u25b6", key="tour_next"):

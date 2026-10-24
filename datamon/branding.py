@@ -58,6 +58,11 @@ div[data-testid="stToolbar"],
 div[data-testid="manage-app-button"],
 .stDeployButton {{ display: none !important; }}
 
+/* Hide per-element hover toolbars (edit pencil, fullscreen, etc.). */
+[data-testid="stElementToolbar"],
+[data-testid="StyledFullScreenButton"],
+button[title="View fullscreen"] {{ display: none !important; }}
+
 /* Help panel: solid readable surface, not translucent over content. */
 div[data-testid="stExpander"]:has(#datamon-help-anchor) summary {{
   background: var(--secondary-background-color, #1a1f2b);
