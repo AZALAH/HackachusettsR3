@@ -79,9 +79,13 @@ of the app. Each slide's lines are also in its speaker notes.
 > it was doing.
 
 ### 2:20–2:42 · Accessibility  `[SCREEN]` **Start guided tour** (let step 1 play ~5 s), then open **Ask about the interface**
-> And nobody gets left out. There's a narrated tour with captions and a
-> pointing arrow, a help assistant that only answers from our own docs, and
-> every animation turns off for anyone who prefers reduced motion.
+> And nobody gets left out. There's a narrated tour, voiced with ElevenLabs,
+> with captions and a pointing arrow, a help assistant that only answers from
+> our own docs, and every animation turns off for anyone who prefers reduced
+> motion.
+
+*(While step 1 plays, add an on-screen caption in editing: "Narration voice:
+ElevenLabs".)*
 
 ### 2:42–2:55 · Close  `[SLIDE 5]`
 > It reads the open LeRobot format, so it works with any dataset published
@@ -107,6 +111,13 @@ demo divider) are at the end of the deck. They're not in the video, but they're
 there for questions or a live presentation.
 
 ---
+
+## Video description (paste into YouTube / Vimeo)
+
+> DataMon: a quality gate for robot training data. Built for Hackachusetts
+> (Robotics & Hardware) by Ahmed Salah and Jesse Silva, using Kiro.
+> Guided-tour narration voice generated with ElevenLabs.
+> Code: https://github.com/AZALAH/HackachusettsR3
 
 ## Don't use tour step 11
 
