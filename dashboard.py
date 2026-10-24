@@ -99,16 +99,14 @@ _require_login()
 
 
 def _play_intro() -> None:
-    """Show the GIF loader once, right after a fresh sign-in."""
+    """Full-screen GIF loader once, right after a fresh sign-in."""
     if not st.session_state.pop("auth_just_logged_in", False):
         return
-    placeholder = st.empty()
-    with placeholder.container():
-        render_loading(st)
+    render_loading(st)      # takes over the screen (chrome hidden)
     time.sleep(LOADING_SECONDS)
-    placeholder.empty()
     st.session_state["auth_show_fade"] = True
-    st.rerun()
+    st.rerun()              # next run renders the real app, faded in
+    st.stop()               # defensive: never fall through during the loader run
 
 
 _play_intro()
