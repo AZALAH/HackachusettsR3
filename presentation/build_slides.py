@@ -335,8 +335,8 @@ def build_slides() -> list:
     )
     title(s, "Built for everyone", "Accessible, and fun to use")
     feats = [
-        ("Narrated guided tour", "11 steps. Voice, captions and a pointing arrow, so "
-                                 "it works with or without sound."),
+        ("Narrated guided tour", "11 steps. Voice (ElevenLabs), captions and a "
+                                 "pointing arrow, so it works with or without sound."),
         ("Grounded help assistant", "Answers only from DataMon's own docs, so it "
                                     "never invents an answer."),
         ("See it and hear it", "Rejections show a colour-coded verdict and play an "
@@ -452,6 +452,9 @@ def build_slides() -> list:
                                           italic=True), align="c")])
     s.text(7.45, 5.3, 5.15, 0.9, [P(_run("Thank you!", 30, TEXT, True, HEAD_FONT),
                                     align="c")])
+    s.text(0.85, 6.3, 11.0, 0.4, [P(_run(
+        "Guided-tour narration voiced with ElevenLabs text-to-speech.", 11, MUTED,
+        italic=True))])
     footer(s, 9)
     slides.append(s)
     # Video order: title, problem, solution, Kiro, close. Then backup slides
