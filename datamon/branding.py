@@ -52,6 +52,20 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
 @media (prefers-reduced-motion: reduce) {{
   .stButton > button:hover {{ transform: none; }}
 }}
+
+/* Hide the Streamlit Cloud deploy/"Manage app" toolbar for a clean demo. */
+div[data-testid="stToolbar"],
+div[data-testid="manage-app-button"],
+.stDeployButton {{ display: none !important; }}
+
+/* Help panel: solid readable surface, not translucent over content. */
+div[data-testid="stExpander"]:has(#datamon-help-anchor) summary {{
+  background: var(--secondary-background-color, #1a1f2b);
+  font-weight: 700;
+}}
+div[data-testid="stExpander"]:has(#datamon-help-anchor) {{
+  background: var(--secondary-background-color, #1a1f2b);
+}}
 </style>
 """
 
