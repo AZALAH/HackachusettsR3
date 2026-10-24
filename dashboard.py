@@ -122,6 +122,33 @@ def play_error_cue() -> None:
         st.audio(str(path), autoplay=True)
 
 
+@st.cache_resource
+def ensure_demo_data() -> bool:
+    """Download the bounded demo dataset once if it is missing.
+
+    On a hosted deploy (e.g. Streamlit Community Cloud) the one-time
+    ``download_frames`` script is never run, so the data directory is empty. This
+    fetches the same pinned, checksum-verified slice on first load. Cached so it
+    runs at most once per server process.
+    """
+    marker = Path("data/lerobot/droid_100/data/chunk-000/file-000.parquet")
+    if marker.is_file():
+        return True
+    try:
+        from scripts.download_frames import main as download_main
+
+        with st.spinner("Preparing the demo dataset (one-time, ~7 MB)…"):
+            download_main()
+        return True
+    except Exception as error:  # surfaced to the user, not a hard crash
+        st.warning(
+            "Could not fetch the demo dataset automatically. Run "
+            "`python scripts/download_frames.py` locally. "
+            f"Details: {error}"
+        )
+        return False
+
+
 @st.cache_data
 def load_metadata(root: str) -> pd.DataFrame:
     return load_episodes(Path(root))
@@ -282,6 +309,7 @@ with st.sidebar.expander("Advanced channel rules"):
         key="static_channels_input",
     )
 
+ensure_demo_data()
 try:
     monitor = load_monitor(
         source, float(fps), jitter_tolerance, float(reject_below),
