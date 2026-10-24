@@ -36,3 +36,24 @@ def test_audio_path_falls_back_to_wav(tmp_path, monkeypatch):
 def test_audio_path_missing_returns_none(tmp_path, monkeypatch):
     monkeypatch.setattr(tour, "AUDIO_DIR", tmp_path)
     assert audio_path_for("nope") is None
+
+
+def test_go_to_step_clamps_and_counts_visits():
+    state = {}
+    tour.go_to_step(state, 3)
+    assert state["tour_active"] is True
+    assert state["tour_index"] == 3
+    assert state["tour_visit"] == 1
+    # Back from the first step and past the last step both stay in range.
+    tour.go_to_step(state, -1)
+    assert state["tour_index"] == 0
+    tour.go_to_step(state, len(TOUR_STEPS) + 5)
+    assert state["tour_index"] == len(TOUR_STEPS) - 1
+    # Each visit is distinct, so a revisited step's narration plays again.
+    assert state["tour_visit"] == 3
+
+
+def test_end_tour_deactivates():
+    state = {"tour_active": True}
+    tour.end_tour(state)
+    assert state["tour_active"] is False

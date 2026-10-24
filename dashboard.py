@@ -28,14 +28,19 @@ from datamon.frames import DEFAULT_MAX_FILE_BYTES, load_parquet
 from datamon.gate import GateConfig, IngestGate, OperatorAction
 from datamon.help_agent import answer as help_answer
 from datamon.help_agent import suggested_questions as help_suggested_questions
-from datamon.intro import LOADING_SECONDS, render_fade, render_loading
+from datamon.intro import render_fade, render_loading
 from datamon.lerobot import load_episodes, task_map
 from datamon.monitor import Monitor
 from datamon.profiles import ProfileStore, RobotProfile
 from datamon.stream import StreamIngestor
 from datamon.tour import audio_path_for, render_tour
 
-st.set_page_config(page_title="Robot Data Quality Monitor", layout="wide")
+st.set_page_config(
+    page_title="DataMon · Robot Data Quality Monitor",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 inject_global_css(st)
 
 
@@ -97,24 +102,6 @@ def _require_login() -> None:
 
 _require_login()
 
-
-def _play_intro() -> None:
-    """Full-screen GIF loader once, right after a fresh sign-in."""
-    if not st.session_state.pop("auth_just_logged_in", False):
-        return
-    render_loading(st)      # takes over the screen (chrome hidden)
-    time.sleep(LOADING_SECONDS)
-    st.session_state["auth_show_fade"] = True
-    st.rerun()              # next run renders the real app, faded in
-    st.stop()               # defensive: never fall through during the loader run
-
-
-_play_intro()
-
-# The dashboard fades in on the run after the loader clears.
-if st.session_state.pop("auth_show_fade", False):
-    render_fade(st)
-
 BRIDGE_ROOT = Path("data/lerobot/bridge_v2")
 BRIDGE_DATA = BRIDGE_ROOT / "data" / "chunk-000"
 DROID_ROOT = Path("data/lerobot/droid_100")
@@ -145,7 +132,7 @@ def play_error_cue() -> None:
         st.audio(str(path), autoplay=True)
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def ensure_demo_data() -> bool:
     """Download the bounded demo dataset once if it is missing.
 
@@ -172,12 +159,7 @@ def ensure_demo_data() -> bool:
         return False
 
 
-@st.cache_data
-def load_metadata(root: str) -> pd.DataFrame:
-    return load_episodes(Path(root))
-
-
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_monitor(
     source: str,
     fps: float,
@@ -223,10 +205,75 @@ def load_monitor(
     return monitor.fit()
 
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def analyze_bridge_metadata() -> tuple[pd.DataFrame, object]:
     metadata = load_episodes(BRIDGE_ROOT)
     return metadata, analyze_episodes(metadata)
+
+
+def _gate_config(monitor: Monitor, reject_below: float, accept_at: float) -> GateConfig:
+    return GateConfig(
+        accept_at=float(accept_at),
+        reject_below=float(reject_below),
+        detector=monitor.detector_config,
+        require_task=True,
+    )
+
+
+@st.cache_resource(show_spinner=False)
+def reference_anomaly_model(
+    source: str,
+    fps: float,
+    jitter_tolerance: float,
+    reject_below: float,
+    accept_at: float,
+    ranges_json: str,
+    static_channels_csv: str,
+):
+    """Fit the gate's anomaly baseline once per settings, shared by all sessions.
+
+    Calibration re-checks every reference episode, which was the slowest step of
+    a fresh session. The fitted model is read-only at scoring time, so each
+    session's gate can reuse it while keeping its own storage directory.
+    """
+    monitor = load_monitor(
+        source, fps, jitter_tolerance, reject_below, accept_at,
+        ranges_json, static_channels_csv,
+    )
+    scratch = Path(tempfile.mkdtemp(prefix="datamon-calibrate-"))
+    gate = IngestGate(scratch, _gate_config(monitor, reject_below, accept_at))
+    return gate.calibrate(monitor.episodes).anomaly_model
+
+
+# The sidebar's default settings. The loader warms exactly these so the first
+# dashboard render after sign-in is served from cache.
+DEFAULT_SETTINGS = ("DROID-100", 15.0, 0.25, 55.0, 80.0, "", "")
+
+
+def _warm_caches() -> None:
+    """Load and calibrate the default view while the loading screen plays."""
+    if not ensure_demo_data():
+        return
+    monitor = load_monitor(*DEFAULT_SETTINGS)
+    monitor.summary_table()  # scores every episode once; results are memoized
+    reference_anomaly_model(*DEFAULT_SETTINGS)
+    analyze_bridge_metadata()
+
+
+def _play_intro() -> None:
+    """Full-screen GIF loader once, right after a fresh sign-in."""
+    if not st.session_state.pop("auth_just_logged_in", False):
+        return
+    render_loading(st, warmup=_warm_caches)  # owns the screen, then fades out
+    st.session_state["auth_show_fade"] = True
+    st.rerun()              # next run renders the real app, faded in
+
+
+_play_intro()
+
+# The dashboard fades in on the run after the loader clears.
+if st.session_state.pop("auth_show_fade", False):
+    render_fade(st)
 
 
 st.sidebar.title("Monitor setup")
@@ -242,13 +289,19 @@ with st.sidebar.container(border=True):
             st.session_state.pop(key, None)
         st.rerun()
 
-with st.sidebar.container(border=True):
+@st.fragment
+def _tour_panel() -> None:
+    """Tour controls re-run only this panel, not the whole dashboard."""
     st.caption("New here? Take the narrated, arrow-guided walkthrough.")
     reduced_motion = st.checkbox(
         "Reduce motion", value=False, key="tour_reduced_motion",
         help="Turn off the bouncing arrow animation in the tour.",
     )
     render_tour(st, reduced_motion=reduced_motion)
+
+
+with st.sidebar.container(border=True):
+    _tour_panel()
 
 source = st.sidebar.selectbox("Data source", ["DROID-100", "BridgeData V2 (sample)"])
 default_fps = 15.0 if source == "DROID-100" else 5.0
@@ -353,14 +406,12 @@ signature = (
     ranges_json, static_channels_csv,
 )
 if st.session_state.get("gate_signature") != signature:
-    gate_config = GateConfig(
-        accept_at=float(accept_at),
-        reject_below=float(reject_below),
-        detector=monitor.detector_config,
-        require_task=True,
-    )
     session_root = INGEST_ROOT / st.session_state.session_id / source.lower().replace(" ", "-")
-    st.session_state.gate = IngestGate(session_root, gate_config).calibrate(monitor.episodes)
+    st.session_state.gate = IngestGate(
+        session_root,
+        _gate_config(monitor, reject_below, accept_at),
+        anomaly_model=reference_anomaly_model(*signature),
+    )
     st.session_state.gate_signature = signature
 gate: IngestGate = st.session_state.gate
 
@@ -385,7 +436,16 @@ with tab_ingest:
     upload_column, stream_column = st.columns(2)
 
     with upload_column:
-        st.markdown("**Upload LeRobot frame parquet**")
+        st.markdown(
+            "**Upload a robot recording**",
+            help=(
+                "A .parquet file in the LeRobot format: Hugging Face's open "
+                "standard for robot datasets. Each row is one moment of the "
+                "recording (the robot's joint readings and the command it was "
+                "given), plus a timestamp."
+            ),
+        )
+        st.caption("LeRobot .parquet format, the open standard for robot datasets.")
         task_description = st.text_input(
             "Task description",
             placeholder="Put the marker in the pot",
@@ -709,20 +769,26 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-with st.expander("💬 Ask about the interface", expanded=False):
-    st.markdown("<span id='datamon-help-anchor'></span>", unsafe_allow_html=True)
-    st.caption(
-        "A grounded assistant — it answers only from DataMon's own documentation, "
-        "so it never guesses."
-    )
-    picked = st.selectbox(
-        "Common questions", ["(choose a question)"] + help_suggested_questions(),
-        key="help_pick",
-    )
-    typed = st.text_input(
-        "…or ask your own", key="help_typed",
-        placeholder="e.g. how does the gate decide?",
-    )
-    query = typed.strip() or (picked if picked != "(choose a question)" else "")
-    if query:
-        st.info(help_answer(query))
+@st.fragment
+def _help_panel() -> None:
+    """Asking a question re-runs only this panel, not the whole dashboard."""
+    with st.expander("💬 Ask about the interface", expanded=False):
+        st.markdown("<span id='datamon-help-anchor'></span>", unsafe_allow_html=True)
+        st.caption(
+            "A grounded assistant — it answers only from DataMon's own "
+            "documentation, so it never guesses."
+        )
+        picked = st.selectbox(
+            "Common questions", ["(choose a question)"] + help_suggested_questions(),
+            key="help_pick",
+        )
+        typed = st.text_input(
+            "…or ask your own", key="help_typed",
+            placeholder="e.g. how does the gate decide?",
+        )
+        query = typed.strip() or (picked if picked != "(choose a question)" else "")
+        if query:
+            st.info(help_answer(query))
+
+
+_help_panel()

@@ -51,12 +51,46 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
 
 @media (prefers-reduced-motion: reduce) {{
   .stButton > button:hover {{ transform: none; }}
+  [data-testid="stExpandSidebarButton"] {{ animation: none !important; }}
 }}
 
-/* Hide the Streamlit Cloud deploy/"Manage app" toolbar for a clean demo. */
-div[data-testid="stToolbar"],
+/* Hide only the right-hand toolbar actions (deploy, main menu, running
+   indicator). The toolbar itself must stay: Streamlit puts the "reopen sidebar"
+   arrow inside it, and hiding the whole toolbar strands a collapsed sidebar. */
+[data-testid="stToolbarActions"],
+[data-testid="stMainMenu"],
+[data-testid="stAppDeployButton"],
+[data-testid="stStatusWidget"],
 div[data-testid="manage-app-button"],
+.stAppDeployButton,
 .stDeployButton {{ display: none !important; }}
+[data-testid="stHeader"] {{ background: transparent !important; }}
+
+/* Make the "reopen sidebar" arrow obvious: teal, outlined, gently glowing. */
+[data-testid="stExpandSidebarButton"] {{
+  display: inline-flex !important; visibility: visible !important;
+  background: rgba(45, 212, 191, 0.14) !important;
+  border: 1px solid var(--datamon-primary) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.5);
+  animation: datamon-glow 2.4s ease-in-out infinite;
+}}
+[data-testid="stExpandSidebarButton"] * {{
+  color: var(--datamon-primary) !important;
+  fill: var(--datamon-primary) !important;
+}}
+@keyframes datamon-glow {{
+  0%, 100% {{ box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.45); }}
+  50% {{ box-shadow: 0 0 0 6px rgba(45, 212, 191, 0); }}
+}}
+
+/* Smoothness: Streamlit dims every element from the previous run while the
+   script re-runs, which reads as flicker on each click. Keep them steady. */
+[data-stale="true"] {{ opacity: 1 !important; transition: none !important; }}
+
+/* Narration and alert sounds play without showing a media player. */
+[data-testid="stElementContainer"]:has([data-testid="stAudio"]),
+[data-testid="stAudio"] {{ display: none !important; }}
 
 /* Hide per-element hover toolbars (edit pencil, fullscreen, etc.). */
 [data-testid="stElementToolbar"],
