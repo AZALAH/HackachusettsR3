@@ -24,6 +24,7 @@ from datamon.lerobot import load_episodes, task_map
 from datamon.monitor import Monitor
 from datamon.profiles import ProfileStore, RobotProfile
 from datamon.stream import StreamIngestor
+from datamon.tour import audio_path_for, render_tour
 
 st.set_page_config(page_title="Robot Data Quality Monitor", layout="wide")
 
@@ -48,6 +49,13 @@ def _parse_ranges(text: str) -> dict[str, tuple[float, float]]:
             raise ValueError(f"{channel} must map to [minimum, maximum]")
         ranges[str(channel)] = (float(bounds[0]), float(bounds[1]))
     return ranges
+
+
+def play_error_cue() -> None:
+    """Play the error alert sound once, if the audio file is present."""
+    path = audio_path_for("alert_error")
+    if path is not None:
+        st.audio(str(path), autoplay=True)
 
 
 @st.cache_data
@@ -109,6 +117,15 @@ def analyze_bridge_metadata() -> tuple[pd.DataFrame, object]:
 
 st.sidebar.title("Monitor setup")
 st.sidebar.caption("Configure the source and quality policy before collection.")
+
+with st.sidebar.container(border=True):
+    st.caption("New here? Take the narrated, arrow-guided walkthrough.")
+    reduced_motion = st.checkbox(
+        "Reduce motion", value=False, key="tour_reduced_motion",
+        help="Turn off the bouncing arrow animation in the tour.",
+    )
+    render_tour(st, reduced_motion=reduced_motion)
+
 source = st.sidebar.selectbox("Data source", ["DROID-100", "BridgeData V2 (sample)"])
 default_fps = 15.0 if source == "DROID-100" else 5.0
 
@@ -299,6 +316,7 @@ with tab_ingest:
                             )
                 except Exception as error:
                     st.error(f"The parquet did not pass schema validation: {error}")
+                    play_error_cue()
                 finally:
                     if temporary_path:
                         temporary_path.unlink(missing_ok=True)
@@ -407,6 +425,7 @@ with tab_review:
                         outcome = gate.operator_decision(ingest_id, action, note)
                     except Exception as error:  # surfaced inline, queue stays usable
                         st.error(f"Could not apply the decision: {error}")
+                        play_error_cue()
                         return
                     st.session_state["review_flash"] = (
                         f"{action.value.replace('operator_', '').upper()} applied to "
