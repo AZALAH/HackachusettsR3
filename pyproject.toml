@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datamon"
+dynamic = ["version"]
+description = "Pre-training quality gates for robot demonstration streams"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [{ name = "Jesse Silva" }]
+keywords = ["robotics", "data-quality", "lerobot", "anomaly-detection"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+    "scikit-learn>=1.2",
+]
+
+[project.optional-dependencies]
+dashboard = ["streamlit>=1.45,<2"]
+dev = ["pytest>=7", "ruff>=0.8"]
+
+[project.urls]
+Repository = "https://github.com/jesseUML/HackachusettsR3"
+Issues = "https://github.com/jesseUML/HackachusettsR3/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "datamon.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["datamon*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]

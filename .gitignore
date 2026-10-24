@@ -1,0 +1,43 @@
+# Downloaded, uploaded, and routed datasets
+data/*
+!data/.gitkeep
+
+# Local environments and secrets
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Python caches and packaging
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+*.whl
+
+# Coverage and logs
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.log
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local models
+*.joblib
+*.pkl
+models/artifacts/
+
+# Retired project reference retained locally, not published
+FaultSense-Project-Notes.pdf
