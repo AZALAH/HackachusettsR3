@@ -123,6 +123,73 @@ def fit_anomaly_model(episodes: List[Episode], seed: int = 42) -> Optional[Anoma
     return AnomalyModel(estimator, mean, std, calibration)
 
 
+def _episode_task_key(episode: Episode) -> Optional[str]:
+    """Group key for conditioning: the task string, lowercased and trimmed."""
+    if episode.task is None:
+        return None
+    key = str(episode.task).strip().lower()
+    return key or None
+
+
+@dataclass
+class TaskConditionedAnomalyModel:
+    """Per-task anomaly baselines with a global fallback.
+
+    A trajectory is typical or atypical relative to OTHER demonstrations of the
+    SAME task: a slow careful insertion and a fast sweep are both fine, but each
+    is anomalous measured against the other. This holds one calibrated
+    :class:`AnomalyModel` per task that has enough approved references, and falls
+    back to a global model for tasks that do not. The returned value remains an
+    empirical upper-tail rank, not a probability of failure.
+    """
+
+    per_task: Dict[str, AnomalyModel]
+    fallback: Optional[AnomalyModel]
+
+    def score(self, vector: np.ndarray, task: Optional[str] = None) -> Optional[float]:
+        key = None if task is None else str(task).strip().lower() or None
+        model = self.per_task.get(key) if key is not None else None
+        if model is None:
+            model = self.fallback
+        if model is None:
+            return None
+        return model.score(vector)
+
+    def score_episode_vector(self, episode: Episode) -> Optional[float]:
+        return self.score(episode_feature_vector(episode), _episode_task_key(episode))
+
+    @property
+    def task_names(self) -> List[str]:
+        return sorted(self.per_task.keys())
+
+
+def fit_task_conditioned_model(
+    episodes: List[Episode],
+    *,
+    min_per_task: int = 8,
+    seed: int = 42,
+) -> TaskConditionedAnomalyModel:
+    """Fit a per-task baseline for every task with enough approved references.
+
+    Tasks below ``min_per_task`` references contribute to the global fallback
+    instead of getting a thin, overconfident model of their own.
+    """
+    by_task: Dict[Optional[str], List[Episode]] = {}
+    for episode in episodes:
+        by_task.setdefault(_episode_task_key(episode), []).append(episode)
+
+    per_task: Dict[str, AnomalyModel] = {}
+    for key, group in by_task.items():
+        if key is None:
+            continue
+        model = fit_anomaly_model(group, seed=seed)
+        if model is not None:
+            per_task[key] = model
+
+    fallback = fit_anomaly_model(episodes, seed=seed)
+    return TaskConditionedAnomalyModel(per_task=per_task, fallback=fallback)
+
+
 def score_episode(
     episode_index: int,
     episode_flags=None,
