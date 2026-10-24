@@ -137,6 +137,10 @@ class StreamIngestor:
             self.on_frame(feedback)
         return feedback
 
+    def discard(self) -> None:
+        """Drop the buffered partial episode without gating or storing it."""
+        self._reset()
+
     def end_episode(self) -> Optional[AdmitResult]:
         """Gate the completed episode and always clear the stream buffer."""
         if not self._states:
