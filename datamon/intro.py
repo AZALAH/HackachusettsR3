@@ -17,30 +17,33 @@ from pathlib import Path
 LOADING_SECONDS = 9
 LOADER_GIF = Path("assets/loader.gif")
 
-# Hides all Streamlit chrome and centers the loader as a full-screen takeover.
+# Hides all Streamlit chrome and matches the GIF's own flat background so the
+# image never shows as a box on a mismatched page.
 _LOADER_CSS = """
 <style>
 [data-testid="stHeader"], [data-testid="stToolbar"],
 [data-testid="stSidebar"] { display: none !important; }
-/* Hide the image fullscreen/expand button on the loader image. */
+/* Hide the image fullscreen/expand button (several Streamlit versions). */
 [data-testid="StyledFullScreenButton"],
-button[title="View fullscreen"] { display: none !important; }
-[data-testid="stAppViewContainer"] {
-  background: radial-gradient(1200px 600px at 50% 40%, #13303a 0%, #0e1117 70%);
-}
-.block-container { padding-top: 8vh !important; }
+[data-testid="stElementToolbar"],
+button[title="View fullscreen"],
+.stImage button { display: none !important; }
+/* Flat background identical to the GIF so there is no visible rectangle. */
+[data-testid="stAppViewContainer"],
+.stApp { background: #0e1117 !important; }
+.block-container { padding-top: 10vh !important; }
 </style>
 """
 
-# Gentle fade for the whole app view, so the dashboard eases in (not choppy).
+# A longer eased fade so the dashboard eases in rather than snapping.
 FADE_CSS = """
 <style>
 [data-testid="stAppViewContainer"] {
-  animation: datamon-fade 1.1s ease-out both;
+  animation: datamon-fade 1.4s ease-in-out both;
 }
 @keyframes datamon-fade {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   [data-testid="stAppViewContainer"] { animation: none; }
