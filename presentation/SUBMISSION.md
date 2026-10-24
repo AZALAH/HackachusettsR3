@@ -1,0 +1,134 @@
+# Submission form text
+
+Paste-ready text for the Hackachusetts submission form. Every claim below
+matches what's in the repo. Before you submit, re-check the numbers marked ✱.
+
+---
+
+## Project name
+DataMon: a quality gate for robot training data
+
+## Challenge track
+**Robotics & Hardware**
+
+## Team
+- Ahmed Salah
+- Jesse Silva
+
+## Links
+- **Live app:** https://hackachusetts-datamon.streamlit.app
+- **Sign-in for judges:** username `judge`, password `Hello World!`
+  (a second account, `programmer` / `101010`, sees the same app)
+- **Source code + `/.kiro` folder:** https://github.com/AZALAH/HackachusettsR3
+- **Demo video:** _(add your YouTube / Vimeo link)_
+
+---
+
+## Text description
+
+Robots learn by copying recorded demonstrations, and one bad recording can
+quietly teach a robot the wrong move. Frozen sensors, dropped frames, timing
+glitches and missing task labels slip into robot datasets. Usually nobody
+notices until after an expensive training run.
+
+**DataMon is a quality gate that catches bad robot data before training.**
+Every recording is checked for timing and sensor integrity, missing or
+nonsense task labels, and how unusual it looks compared with known-good
+recordings of the same task. It gets a score from 0 to 100 with the reasons
+behind it, then is routed one of three ways:
+
+- **Accept:** stored in a clean staging area, ready for training.
+- **Review:** held for a person to decide.
+- **Reject:** quarantined, so integrity failures never reach training.
+
+**Features**
+- **Ingest gate:** upload a LeRobot `.parquet` recording, or replay one frame by
+  frame through the live streaming API, with warnings as it streams.
+- **Operator review queue:** promote, reject or request re-recording, with an
+  append-only audit trail keyed by each recording's content ID.
+- **Dataset report card:** a score, verdict and reasons for every recording.
+- **Label and coverage analysis:** flags missing and gibberish task labels in
+  BridgeData V2.
+- **Collector adapter:** a transport-agnostic interface so a live robot (ROS 2,
+  WebSocket or a robot SDK) can stream into the same gate, with policies for
+  disconnects, partial recordings and backpressure.
+- **Robot profiles:** save each rig's expected capture rate, channel ranges and
+  static channels, and reapply them in one click.
+- **Task-conditioned anomaly baselines:** each recording is compared with
+  others of the same task. The result is reported honestly as a rank, not a
+  probability.
+- **Accessibility:** an 11-step narrated guided tour with captions and a
+  pointing arrow, a help assistant that only answers from DataMon's own docs,
+  colour-coded verdicts with an alert sound, and reduced-motion support.
+- **Polish:** an animated robot mascot, a loading screen that loads and scores
+  the data while showing robotics jokes and fun facts, a robot-themed binary
+  clock, and a demo-grade login (hashed passwords, lockout and idle timeout).
+
+**Data:** real public robotics datasets in the open LeRobot format: 100
+recordings from DROID, plus a BridgeData V2 sample. The app downloads a
+small (about 7 MB), checksum-verified slice on first load.
+
+**Built with:** Python, Streamlit, NumPy, pandas, PyArrow and scikit-learn.
+
+---
+
+## How we used Kiro
+
+**Tools: Kiro Crew and Kiro Web.** We used two Kiro tools at different stages,
+and they suited different jobs.
+
+- **Kiro Crew** ran on a Windows laptop. It installed Python, built the
+  virtual environment, ran the app and the full test suite on the real machine,
+  and shipped each feature as its own branch → pull request → merge. It covered
+  the core roadmap: the operator review loop, collector adapter, robot
+  profiles, task-conditioned baselines, the narrated tour, help assistant,
+  theme, login and deployment.
+- **Kiro Web** ran in a cloud sandbox with no access to package indexes, so it
+  couldn't install Streamlit to run the app. It worked around this in three
+  ways. It read Streamlit's own source code on GitHub, pinned to our exact
+  version (1.66.1), to confirm the details our UI depends on. It used GitHub
+  CI to run the full test suite on Python 3.9 and 3.13 before every merge. And
+  it used the **Playwright power (an MCP server)** to render the loading
+  screen, header, clock and login page in a headless browser and screenshot
+  them before shipping. That's how we found and fixed layout issues without a
+  running server. Kiro Web delivered the animated loader, the "pop into
+  place" reveal, the robot mascot, the binary clock, the login redesign and
+  this pitch deck.
+
+**Spec-driven development.** Core features have specs in `/.kiro/specs`:
+requirements, design and tasks for the operator review loop and the collector
+adapter, and a combined spec for the accessible tour. Writing the spec first
+kept each change small and testable, and made "done" objective. Compared with
+vibe coding, every pull request mapped to a spec, and nothing merged until the
+checks passed.
+
+**Steering docs.** `/.kiro/steering/conventions.md` and `product.md` carried
+the same rules into every session. The workflow rule was branch → pull
+request → green checks → merge. The honesty rules were that the anomaly score
+is a rank, not a probability, and that the login is demo-grade, not production
+security. Steering also fixed the project's vocabulary. Because Kiro got the
+same standards every session, it stayed consistent across dozens of changes.
+
+**MCP and powers.** The Playwright power gave Kiro a real browser, so it could
+check visual work itself instead of relying on us to describe screenshots.
+
+**By the numbers:** ✱ 21 merged pull requests, ✱ 129 automated tests passing in
+CI on Python 3.9 and 3.13.
+
+**What we didn't use.** We didn't set up agent hooks or property-based tests
+for this project. Our test suite is example-based unit tests plus Streamlit's
+app test harness. Both would be natural next steps: a hook to run lint and
+tests on save, and property-based tests for the scoring bounds and the
+routing thresholds.
+
+---
+
+## Fix before submitting
+
+Tour step 11 currently says the project was built with "specs, agent hooks, and
+property-based tests". The last two aren't true for this repo. Options:
+1. **Change the caption and re-record one line** (recommended). New line:
+   > That's DataMon: good data in, bad data out, caught early. Built with Kiro,
+   > from specs and steering docs to a browser it could check its own work in.
+   > Teaching robots is hard enough without teaching them bad habits.
+2. **Add real hooks and property-based tests** so the line becomes true.
