@@ -28,7 +28,7 @@ from datamon.frames import DEFAULT_MAX_FILE_BYTES, load_parquet
 from datamon.gate import GateConfig, IngestGate, OperatorAction
 from datamon.help_agent import answer as help_answer
 from datamon.help_agent import suggested_questions as help_suggested_questions
-from datamon.intro import LOADING_SECONDS, render_loading, render_popin
+from datamon.intro import LOADING_SECONDS, render_fade, render_loading
 from datamon.lerobot import load_episodes, task_map
 from datamon.monitor import Monitor
 from datamon.profiles import ProfileStore, RobotProfile
@@ -99,23 +99,23 @@ _require_login()
 
 
 def _play_intro() -> None:
-    """Show the robot-driving loader once, right after a fresh sign-in."""
+    """Show the GIF loader once, right after a fresh sign-in."""
     if not st.session_state.pop("auth_just_logged_in", False):
         return
     placeholder = st.empty()
     with placeholder.container():
-        render_loading(st, LOADING_SECONDS)
+        render_loading(st)
     time.sleep(LOADING_SECONDS)
     placeholder.empty()
-    st.session_state["auth_show_popin"] = True
+    st.session_state["auth_show_fade"] = True
     st.rerun()
 
 
 _play_intro()
 
-# The app pops into place on the run after the loader clears.
-if st.session_state.pop("auth_show_popin", False):
-    render_popin(st)
+# The dashboard fades in on the run after the loader clears.
+if st.session_state.pop("auth_show_fade", False):
+    render_fade(st)
 
 BRIDGE_ROOT = Path("data/lerobot/bridge_v2")
 BRIDGE_DATA = BRIDGE_ROOT / "data" / "chunk-000"
