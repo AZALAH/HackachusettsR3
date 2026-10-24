@@ -21,14 +21,18 @@ from datamon.auth import (
     session_expired,
     verify_password,
 )
-from datamon.branding import inject_global_css, render_brand_header
+from datamon.branding import (
+    inject_global_css,
+    render_brand_header,
+    render_login_hero,
+)
 from datamon.episode_quality import analyze_episodes
 from datamon.frame_quality import DetectorConfig
 from datamon.frames import DEFAULT_MAX_FILE_BYTES, load_parquet
 from datamon.gate import GateConfig, IngestGate, OperatorAction
 from datamon.help_agent import answer as help_answer
 from datamon.help_agent import suggested_questions as help_suggested_questions
-from datamon.intro import render_fade, render_loading
+from datamon.intro import render_loading, render_reveal
 from datamon.lerobot import load_episodes, task_map
 from datamon.monitor import Monitor
 from datamon.profiles import ProfileStore, RobotProfile
@@ -62,10 +66,9 @@ def _require_login() -> None:
         state["auth_lockout"] = LockoutState()
     lockout: LockoutState = state["auth_lockout"]
 
-    left, center, right = st.columns([1, 1.2, 1])
+    left, center, right = st.columns([1, 1.15, 1])
     with center:
-        render_brand_header(st)
-        st.markdown("#### Sign in")
+        render_login_hero(st)
         notice = state.pop("auth_notice", None)
         if notice:
             st.warning(notice)
@@ -86,6 +89,7 @@ def _require_login() -> None:
                 state["auth_role"] = role
                 state["auth_last_active"] = time.time()
                 state["auth_just_logged_in"] = True
+                state["reveal_token"] = uuid.uuid4().hex
                 st.rerun()
             else:
                 lockout.record_failure()
@@ -126,10 +130,20 @@ def _parse_ranges(text: str) -> dict[str, tuple[float, float]]:
 
 
 def play_error_cue() -> None:
-    """Play the error alert sound once, if the audio file is present."""
+    """Play the error alert sound once, if the audio file is present.
+
+    Streamlit never re-plays an audio element it has already auto-played, and
+    identical calls get the same element ID. A fresh ``alt`` per call makes
+    every alert a new element, so the second rejection beeps too.
+    """
     path = audio_path_for("alert_error")
     if path is not None:
-        st.audio(str(path), autoplay=True)
+        st.audio(
+            str(path),
+            format="audio/mpeg" if path.suffix == ".mp3" else "audio/wav",
+            autoplay=True,
+            alt=f"Alert sound ({uuid.uuid4().hex[:8]})",
+        )
 
 
 @st.cache_resource(show_spinner=False)
@@ -265,15 +279,15 @@ def _play_intro() -> None:
     if not st.session_state.pop("auth_just_logged_in", False):
         return
     render_loading(st, warmup=_warm_caches)  # owns the screen, then fades out
-    st.session_state["auth_show_fade"] = True
-    st.rerun()              # next run renders the real app, faded in
+    st.session_state["auth_show_reveal"] = True
+    st.rerun()              # next run renders the real app and pops it in
 
 
 _play_intro()
 
-# The dashboard fades in on the run after the loader clears.
-if st.session_state.pop("auth_show_fade", False):
-    render_fade(st)
+# On the run after the loader, every tile pops into place once.
+if st.session_state.pop("auth_show_reveal", False):
+    render_reveal(st, st.session_state.get("reveal_token", "reveal"))
 
 
 st.sidebar.title("Monitor setup")
@@ -415,7 +429,7 @@ if st.session_state.get("gate_signature") != signature:
     st.session_state.gate_signature = signature
 gate: IngestGate = st.session_state.gate
 
-render_brand_header(st)
+render_brand_header(st, clock=True)
 st.title("Robot Data-Collection Quality Monitor")
 st.caption(
     "Catch sensor, timing, labeling, and demonstration problems before they "
@@ -496,6 +510,8 @@ with tab_ingest:
                                 f"{admitted.decision.value.upper()}: exact evaluated "
                                 f"episode stored at {admitted.stored_path}"
                             )
+                            if admitted.decision.value == "reject":
+                                play_error_cue()
                 except Exception as error:
                     st.error(f"The parquet did not pass schema validation: {error}")
                     play_error_cue()
@@ -547,6 +563,8 @@ with tab_ingest:
                 f"({admitted.score.score:.0f}/100)",
                 unsafe_allow_html=True,
             )
+            if admitted.decision.value == "reject":
+                play_error_cue()
             for frame_index, warning in warning_log[:5]:
                 st.caption(f"frame {frame_index}: {warning}")
 
