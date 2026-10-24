@@ -19,7 +19,7 @@ import pandas as pd
 
 from datamon.episode_quality import Flag, flags_for_episode
 from datamon.frame_quality import DetectorConfig, FrameReport, analyze_frames
-from datamon.frames import Episode
+from datamon.frames import Episode, load_episode_file
 from datamon.scoring import (
     AnomalyModel,
     EpisodeScore,
@@ -33,6 +33,20 @@ class Decision(str, Enum):
     ACCEPT = "accept"
     REVIEW = "review"
     REJECT = "reject"
+
+
+class OperatorAction(str, Enum):
+    """Why a manifest event exists.
+
+    ``AUTOMATED`` is the gate's own routing decision. The rest are human review
+    actions recorded on top of an existing content ID without discarding its
+    history.
+    """
+
+    AUTOMATED = "automated"
+    PROMOTE = "operator_promote"
+    REJECT = "operator_reject"
+    RECOLLECT = "operator_recollect"
 
 
 @dataclass(frozen=True)
@@ -66,6 +80,9 @@ class AdmitResult:
     stored_path: Optional[str] = None
     ingest_id: Optional[str] = None
     source: str = "unknown"
+    fps: Optional[float] = None
+    action: OperatorAction = OperatorAction.AUTOMATED
+    note: Optional[str] = None
 
     def as_dict(self) -> dict:
         return {
@@ -80,6 +97,9 @@ class AdmitResult:
             "anomaly_score": self.score.anomaly_score,
             "reasons": self.reasons,
             "stored_path": self.stored_path,
+            "fps": self.fps,
+            "action": self.action.value,
+            "note": self.note,
         }
 
 
@@ -152,6 +172,7 @@ class IngestGate:
             episode_flags=episode_flags,
             reasons=reasons,
             source=episode.source,
+            fps=episode.fps,
         )
 
     def admit(self, episode: Episode) -> AdmitResult:
@@ -276,6 +297,94 @@ class IngestGate:
             if decision in counts:
                 counts[decision] += 1
         return counts
+
+    def review_queue(self) -> List[dict]:
+        """Latest record for every content ID currently routed to review.
+
+        Sorted worst-first so an operator sees the most doubtful episodes at the
+        top of the queue.
+        """
+        pending = [
+            record for record in self._latest_records().values()
+            if record.get("decision") == Decision.REVIEW.value
+        ]
+        pending.sort(key=lambda record: record.get("score", 0.0))
+        return pending
+
+    def history(self, ingest_id: str) -> List[dict]:
+        """Every manifest event for one content ID, oldest first."""
+        events: List[dict] = []
+        if not self.manifest.exists():
+            return events
+        with self.manifest.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    record = json.loads(line)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if record.get("ingest_id") == ingest_id:
+                    events.append(record)
+        return events
+
+    def operator_decision(
+        self,
+        ingest_id: str,
+        action: OperatorAction,
+        note: Optional[str] = None,
+    ) -> AdmitResult:
+        """Apply a human review decision to an already-gated episode.
+
+        The exact stored episode is reconstructed from its content-addressed
+        parquet and its original scores are preserved; only the route and the
+        audit trail change. ``PROMOTE`` moves it to clean, ``REJECT`` to
+        quarantine, and ``RECOLLECT`` keeps it in review while recording that
+        recollection was requested. Prior history is never rewritten; a new
+        event is appended so the manifest shows who changed the route and why.
+        """
+        if action is OperatorAction.AUTOMATED:
+            raise ValueError("operator_decision requires a human review action")
+
+        with self._lock:
+            current = self._latest_records().get(ingest_id)
+            if current is None:
+                raise KeyError(f"unknown ingest_id: {ingest_id}")
+            if current.get("decision") != Decision.REVIEW.value:
+                raise ValueError(
+                    f"ingest_id {ingest_id[:12]} is not in review "
+                    f"(current route: {current.get('decision')})"
+                )
+
+            stored_path = current.get("stored_path")
+            if not stored_path or not Path(stored_path).is_file():
+                raise FileNotFoundError(
+                    f"stored episode for {ingest_id[:12]} is missing on disk"
+                )
+            episode = load_episode_file(
+                Path(stored_path), fps=current.get("fps")
+            )
+
+            result = self.evaluate(episode)
+            if action is OperatorAction.PROMOTE:
+                result.decision = Decision.ACCEPT
+            elif action is OperatorAction.REJECT:
+                result.decision = Decision.REJECT
+            else:  # RECOLLECT keeps the item in the review route.
+                result.decision = Decision.REVIEW
+            result.action = action
+            result.note = (note or "").strip() or None
+            result.ingest_id = ingest_id
+            result.source = current.get("source", episode.source)
+
+            source = self._safe_source(result.source)
+            filename = (
+                f"episode_{episode.episode_index:06d}_{ingest_id[:12]}.parquet"
+            )
+            destination = self.dirs[result.decision] / source / filename
+            self._write_episode(episode, destination)
+            self._remove_other_routes(ingest_id, destination)
+            result.stored_path = str(destination)
+            self._log(result)
+        return result
 
     def wasted_frames_prevented(self) -> int:
         return sum(
