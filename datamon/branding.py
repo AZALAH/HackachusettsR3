@@ -90,6 +90,10 @@ div[data-testid="manage-app-button"],
    script re-runs, which reads as flicker on each click. Keep them steady. */
 [data-stale="true"] {{ opacity: 1 !important; transition: none !important; }}
 
+/* Sidebar: start content right under the collapse arrow (clock sits here). */
+[data-testid="stSidebarUserContent"] {{ padding-top: 0 !important; }}
+[data-testid="stSidebarHeader"] {{ margin-bottom: 0 !important; }}
+
 /* Hide the chain-link anchor icons Streamlit adds next to headings. */
 [data-testid="stHeaderActionElements"] {{ display: none !important; }}
 
@@ -140,7 +144,7 @@ _HEADER_CSS = """
 # A robot-head clock face. Hour marks are the numbers 1-12 written in binary,
 # like a classic binary wall clock. Static markup is built here; a tiny script
 # moves the hands every second using the VIEWER's local time.
-_CLOCK_SIZE = 128
+_CLOCK_SIZE = 176
 _CLOCK_CSS = """
 <style>
 .dm-clock{position:relative;display:flex;flex-direction:column;align-items:center;
@@ -160,7 +164,7 @@ _CLOCK_CSS = """
   border:3px solid #2dd4bf;box-shadow:0 0 0 3px #1f2937,0 6px 18px rgba(0,0,0,.35),
   inset 0 0 14px rgba(45,212,191,.18)}
 .dm-clock-num{position:absolute;transform:translate(-50%,-50%);
-  font:700 8.5px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font:700 __NUM__px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   color:#c9e9e3;letter-spacing:.02em}
 .dm-clock-hand{position:absolute;left:50%;bottom:50%;transform-origin:50% 100%;
   border-radius:3px;transform:translateX(-50%) rotate(0deg)}
@@ -171,9 +175,9 @@ _CLOCK_CSS = """
   margin:-6.5px 0 0 -6.5px;border-radius:50%;background:#2dd4bf;
   border:3px solid #1f2937}
 .dm-clock-read{text-align:center;line-height:1.15}
-.dm-clock-bin{font:700 .78rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+.dm-clock-bin{font:700 .95rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   color:#2dd4bf;letter-spacing:.04em}
-.dm-clock-dec{font-size:.72rem;opacity:.7}
+.dm-clock-dec{font-size:.85rem;opacity:.75}
 @keyframes dm-clock-led{0%,100%{opacity:1}50%{opacity:.35}}
 @media (prefers-reduced-motion: reduce){.dm-clock-antenna::before{animation:none}}
 </style>
@@ -227,6 +231,7 @@ def clock_html(size: int = _CLOCK_SIZE) -> str:
         )
     return (
         _CLOCK_CSS.replace("__SIZE__", str(size))
+        .replace("__NUM__", f"{size * 0.066:.1f}")
         + '<div class="dm-clock" role="img" aria-label="Current time">'
         + '<div class="dm-clock-head">'
         + '<div class="dm-clock-antenna"></div>'
@@ -259,6 +264,15 @@ def brand_header_html(*, logo_size: int = 64, clock: bool = False) -> str:
 def inject_global_css(st_module) -> None:
     """Apply the shared CSS polish. Safe to call once near the top of a page."""
     st_module.markdown(_GLOBAL_CSS, unsafe_allow_html=True)
+
+
+def render_clock(st_module, size: int = _CLOCK_SIZE) -> None:
+    """Render the live robot binary clock, centred, in the given container."""
+    st_module.html(
+        '<div style="display:flex;justify-content:center;padding:.1rem 0 .6rem">'
+        + clock_html(size) + "</div>" + _CLOCK_SCRIPT,
+        unsafe_allow_javascript=True,
+    )
 
 
 def render_brand_header(st_module, *, clock: bool = False) -> None:
