@@ -23,8 +23,10 @@ from datamon.frames import Episode, load_episode_file
 from datamon.scoring import (
     AnomalyModel,
     EpisodeScore,
+    TaskConditionedAnomalyModel,
     episode_feature_vector,
     fit_anomaly_model,
+    fit_task_conditioned_model,
     score_episode,
 )
 
@@ -132,6 +134,24 @@ class IngestGate:
 
     def calibrate(self, reference_episodes: List[Episode]) -> "IngestGate":
         """Fit anomaly scoring only on reference episodes without hard errors."""
+        self.anomaly_model = fit_anomaly_model(self._clean_references(reference_episodes))
+        return self
+
+    def calibrate_per_task(
+        self, reference_episodes: List[Episode], *, min_per_task: int = 8,
+    ) -> "IngestGate":
+        """Fit task-conditioned anomaly baselines with a global fallback.
+
+        An episode is scored against other demonstrations of the SAME task when
+        that task has at least ``min_per_task`` clean references; otherwise it
+        falls back to the global baseline.
+        """
+        self.anomaly_model = fit_task_conditioned_model(
+            self._clean_references(reference_episodes), min_per_task=min_per_task,
+        )
+        return self
+
+    def _clean_references(self, reference_episodes: List[Episode]) -> List[Episode]:
         clean = []
         for episode in reference_episodes:
             frame_report = analyze_frames(episode, config=self.config.detector)
@@ -140,21 +160,26 @@ class IngestGate:
                                                for flag in metadata):
                 continue
             clean.append(episode)
-        self.anomaly_model = fit_anomaly_model(clean)
-        return self
+        return clean
 
     def _episode_flags(self, episode: Episode) -> List[Flag]:
         if not self.config.require_task and episode.task is None:
             return []
         return flags_for_episode(episode.episode_index, episode.task)
 
+    def _anomaly_score(self, episode: Episode) -> Optional[float]:
+        if self.anomaly_model is None:
+            return None
+        vector = episode_feature_vector(episode)
+        # Task-conditioned models take the task; the global model does not.
+        if isinstance(self.anomaly_model, TaskConditionedAnomalyModel):
+            return self.anomaly_model.score(vector, episode.task)
+        return self.anomaly_model.score(vector)
+
     def evaluate(self, episode: Episode) -> AdmitResult:
         frame_report = analyze_frames(episode, config=self.config.detector)
         episode_flags = self._episode_flags(episode)
-        anomaly = (
-            self.anomaly_model.score(episode_feature_vector(episode))
-            if self.anomaly_model else None
-        )
+        anomaly = self._anomaly_score(episode)
         score = score_episode(
             episode.episode_index,
             episode_flags=episode_flags,
