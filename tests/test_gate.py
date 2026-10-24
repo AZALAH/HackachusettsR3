@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from datamon.frames import Episode, load_episode_file
-from datamon.gate import Decision, GateConfig, IngestGate
+from datamon.gate import Decision, GateConfig, IngestGate, OperatorAction
 from datamon.stream import StreamIngestor
 
 
@@ -177,3 +177,93 @@ def test_stream_resets_even_when_callback_fails(gate):
 def test_invalid_threshold_order_is_rejected():
     with pytest.raises(ValueError, match="thresholds"):
         GateConfig(accept_at=50, reject_below=60)
+
+
+# --- Operator review loop ---------------------------------------------------
+
+
+def _review_gate(tmp_path):
+    """A gate whose only item lands in review (score forces the middle band)."""
+    root = tmp_path / "ingest"
+    gate = IngestGate(
+        root, GateConfig(accept_at=100, reject_below=0, require_task=True)
+    )
+    episode = make_episode(800, seed=3)
+    # A mid-range freeze costs quality points without an integrity hard-reject,
+    # so the score lands strictly below accept_at (100) and above reject_below (0).
+    episode.state[:10, 0] = np.linspace(-1.0, 1.0, 10)
+    episode.state[10:, 0] = 0.25
+    result = gate.admit(episode)
+    assert result.decision == Decision.REVIEW
+    return gate, result
+
+
+def test_review_queue_lists_pending_items(tmp_path):
+    gate, result = _review_gate(tmp_path)
+    queue = gate.review_queue()
+    assert len(queue) == 1
+    assert queue[0]["ingest_id"] == result.ingest_id
+
+
+def test_promote_moves_review_to_clean(tmp_path):
+    gate, result = _review_gate(tmp_path)
+    outcome = gate.operator_decision(result.ingest_id, OperatorAction.PROMOTE)
+    assert outcome.decision == Decision.ACCEPT
+    assert outcome.ingest_id == result.ingest_id
+    assert Path(outcome.stored_path).is_file()
+    assert "clean" in Path(outcome.stored_path).parts
+    assert not Path(result.stored_path).exists()
+    assert gate.stats()["accept"] == 1
+    assert gate.review_queue() == []
+
+
+def test_reject_moves_review_to_quarantine(tmp_path):
+    gate, result = _review_gate(tmp_path)
+    outcome = gate.operator_decision(
+        result.ingest_id, OperatorAction.REJECT, note="jerky trajectory"
+    )
+    assert outcome.decision == Decision.REJECT
+    assert "quarantine" in Path(outcome.stored_path).parts
+    assert gate.stats()["reject"] == 1
+
+
+def test_recollect_keeps_item_in_review_with_audit(tmp_path):
+    gate, result = _review_gate(tmp_path)
+    outcome = gate.operator_decision(
+        result.ingest_id, OperatorAction.RECOLLECT, note="recapture with fresh rig"
+    )
+    assert outcome.decision == Decision.REVIEW
+    assert gate.review_queue()[0]["ingest_id"] == result.ingest_id
+    history = gate.history(result.ingest_id)
+    assert history[-1]["action"] == "operator_recollect"
+    assert history[-1]["note"] == "recapture with fresh rig"
+
+
+def test_history_preserves_every_event(tmp_path):
+    gate, result = _review_gate(tmp_path)
+    gate.operator_decision(result.ingest_id, OperatorAction.RECOLLECT)
+    gate.operator_decision(result.ingest_id, OperatorAction.PROMOTE)
+    history = gate.history(result.ingest_id)
+    assert [event["action"] for event in history] == [
+        "automated", "operator_recollect", "operator_promote",
+    ]
+    assert sum(gate.stats().values()) == 1
+
+
+def test_operator_decision_rejects_unknown_id(tmp_path):
+    gate, _ = _review_gate(tmp_path)
+    with pytest.raises(KeyError):
+        gate.operator_decision("deadbeef", OperatorAction.PROMOTE)
+
+
+def test_cannot_act_on_item_not_in_review(tmp_path):
+    gate, result = _review_gate(tmp_path)
+    gate.operator_decision(result.ingest_id, OperatorAction.PROMOTE)
+    with pytest.raises(ValueError, match="not in review"):
+        gate.operator_decision(result.ingest_id, OperatorAction.REJECT)
+
+
+def test_automated_action_is_not_a_valid_operator_decision(tmp_path):
+    gate, result = _review_gate(tmp_path)
+    with pytest.raises(ValueError, match="human review action"):
+        gate.operator_decision(result.ingest_id, OperatorAction.AUTOMATED)

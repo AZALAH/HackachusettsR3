@@ -19,7 +19,7 @@ import streamlit as st
 from datamon.episode_quality import analyze_episodes
 from datamon.frame_quality import DetectorConfig
 from datamon.frames import DEFAULT_MAX_FILE_BYTES, load_parquet
-from datamon.gate import GateConfig, IngestGate
+from datamon.gate import GateConfig, IngestGate, OperatorAction
 from datamon.lerobot import load_episodes, task_map
 from datamon.monitor import Monitor
 from datamon.stream import StreamIngestor
@@ -172,8 +172,9 @@ st.info(
     "under data/ingest_live/. Do not expose this app publicly without authentication."
 )
 
-tab_ingest, tab_live, tab_dataset, tab_labels = st.tabs([
-    "Ingest gate", "Episode playback", "Dataset quality", "Label / coverage",
+tab_ingest, tab_review, tab_live, tab_dataset, tab_labels = st.tabs([
+    "Ingest gate", "Review queue", "Episode playback", "Dataset quality",
+    "Label / coverage",
 ])
 
 with tab_ingest:
@@ -296,6 +297,98 @@ with tab_ingest:
     metrics[1].metric("Review", stats["review"])
     metrics[2].metric("Rejected", stats["reject"])
     metrics[3].metric("Rejected frames", gate.wasted_frames_prevented())
+
+with tab_review:
+    st.subheader("Operator review queue")
+    st.caption(
+        "Episodes the gate could not accept or reject on its own. Promote a good "
+        "demonstration to clean, reject a bad one, or request recollection. Every "
+        "decision is appended to the audit manifest; the content ID and prior "
+        "history are preserved."
+    )
+    queue = gate.review_queue()
+    if not queue:
+        st.success("The review queue is empty. Nothing is waiting on an operator.")
+    else:
+        st.metric("Awaiting review", len(queue))
+        for record in queue:
+            ingest_id = record.get("ingest_id", "")
+            short_id = ingest_id[:12]
+            episode_index = record.get("episode_index")
+            score = record.get("score", 0.0)
+            with st.container(border=True):
+                header = st.columns([3, 1])
+                header[0].markdown(
+                    f"**Episode {episode_index}** · source `{record.get('source')}` "
+                    f"· content `{short_id}`"
+                )
+                header[1].markdown(
+                    f"<div style='text-align:right;color:{GRADE_COLOR['review']};"
+                    f"font-weight:700;font-size:1.3rem'>{score:.0f}/100</div>",
+                    unsafe_allow_html=True,
+                )
+                for reason in (record.get("reasons") or [])[:4]:
+                    st.caption(f"• {reason}")
+
+                note = st.text_input(
+                    "Decision note (optional)",
+                    key=f"review-note-{ingest_id}",
+                    placeholder="Why are you promoting, rejecting, or recollecting?",
+                )
+                actions = st.columns(3)
+
+                def _apply(
+                    action: OperatorAction,
+                    ingest_id=ingest_id,
+                    note=note,
+                    short_id=short_id,
+                ):
+                    try:
+                        outcome = gate.operator_decision(ingest_id, action, note)
+                    except Exception as error:  # surfaced inline, queue stays usable
+                        st.error(f"Could not apply the decision: {error}")
+                        return
+                    st.session_state["review_flash"] = (
+                        f"{action.value.replace('operator_', '').upper()} applied to "
+                        f"episode {outcome.episode_index} "
+                        f"→ {outcome.decision.value.upper()} ({short_id})"
+                    )
+                    st.rerun()
+
+                if actions[0].button(
+                    "Promote to clean ✅", key=f"promote-{ingest_id}",
+                    width="stretch",
+                ):
+                    _apply(OperatorAction.PROMOTE)
+                if actions[1].button(
+                    "Reject ⛔", key=f"reject-{ingest_id}", width="stretch",
+                ):
+                    _apply(OperatorAction.REJECT)
+                if actions[2].button(
+                    "Request recollection 🔁", key=f"recollect-{ingest_id}",
+                    width="stretch",
+                ):
+                    _apply(OperatorAction.RECOLLECT)
+
+                with st.expander("Audit history"):
+                    for event in gate.history(ingest_id):
+                        stamp = time.strftime(
+                            "%Y-%m-%d %H:%M:%S", time.localtime(event.get("ts", 0))
+                        )
+                        label = event.get("action", "automated").replace(
+                            "operator_", ""
+                        )
+                        line = (
+                            f"{stamp} · {label} → "
+                            f"{event.get('decision', '?').upper()}"
+                        )
+                        if event.get("note"):
+                            line += f" · {event['note']}"
+                        st.caption(line)
+
+    flash = st.session_state.pop("review_flash", None)
+    if flash:
+        st.toast(flash)
 
 with tab_live:
     selection, play_column = st.columns([3, 1])
