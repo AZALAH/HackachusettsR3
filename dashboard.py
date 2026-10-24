@@ -20,6 +20,8 @@ from datamon.episode_quality import analyze_episodes
 from datamon.frame_quality import DetectorConfig
 from datamon.frames import DEFAULT_MAX_FILE_BYTES, load_parquet
 from datamon.gate import GateConfig, IngestGate, OperatorAction
+from datamon.help_agent import answer as help_answer
+from datamon.help_agent import suggested_questions as help_suggested_questions
 from datamon.lerobot import load_episodes, task_map
 from datamon.monitor import Monitor
 from datamon.profiles import ProfileStore, RobotProfile
@@ -572,3 +574,35 @@ with tab_labels:
         flags = report.flags_frame()
         if not flags.empty:
             st.dataframe(flags.head(200), width="stretch", height=360)
+
+# --- Grounded help agent (bottom-right) ------------------------------------
+
+st.markdown(
+    """
+    <style>
+    div[data-testid="stExpander"]:has(#datamon-help-anchor) {
+        position: fixed; bottom: 1rem; right: 1rem; width: 360px;
+        max-width: 90vw; z-index: 1000;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.35); border-radius: 12px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+with st.expander("💬 Ask about the interface", expanded=False):
+    st.markdown("<span id='datamon-help-anchor'></span>", unsafe_allow_html=True)
+    st.caption(
+        "A grounded assistant — it answers only from DataMon's own documentation, "
+        "so it never guesses."
+    )
+    picked = st.selectbox(
+        "Common questions", ["(choose a question)"] + help_suggested_questions(),
+        key="help_pick",
+    )
+    typed = st.text_input(
+        "…or ask your own", key="help_typed",
+        placeholder="e.g. how does the gate decide?",
+    )
+    query = typed.strip() or (picked if picked != "(choose a question)" else "")
+    if query:
+        st.info(help_answer(query))
